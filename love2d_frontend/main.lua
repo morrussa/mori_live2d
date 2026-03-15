@@ -229,6 +229,39 @@ function love.keypressed(key)
   end
 end
 
+function love.filedropped(file)
+  if not (inochi.ok and state.puppet ~= nil) then
+    return
+  end
+  local filename = file:getFilename()
+  if not filename or filename == "" then
+    return
+  end
+  local lower = string.lower(filename)
+  if not (string.sub(lower, -4) == ".inx" or string.sub(lower, -4) == ".inp") then
+    state.err = "dropped file is not a puppet (.inx/.inp): " .. tostring(filename)
+    return
+  end
+
+  inochi.destroy_puppet(state.puppet)
+  state.puppet = nil
+
+  local puppet, perr = inochi.load_puppet(filename)
+  if not puppet then
+    state.err = tostring(perr or "failed to load puppet: " .. tostring(filename))
+    return
+  end
+
+  state.puppetPath = filename
+  state.puppet = puppet
+  local params, by_name = inochi.get_parameters(puppet)
+  state.params = params
+  state.paramByName = by_name
+  state.mapping = controller.make_mapping(by_name)
+  state.err = ""
+  print("inochi2d> switched puppet: " .. tostring(filename))
+end
+
 function love.quit()
   if inochi.ok then
     inochi.destroy_puppet(state.puppet)
