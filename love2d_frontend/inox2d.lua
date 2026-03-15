@@ -58,9 +58,13 @@ function M.find_library()
   local base = love.filesystem.getSourceBaseDirectory()
   local wd = love.filesystem.getWorkingDirectory and love.filesystem.getWorkingDirectory() or ""
   local candidates = {
+    -- Repo-root (recommended): run `love mori_live2d/love2d_frontend` from repo root.
+    (wd ~= "" and (wd .. "/model/inochi2d/native/libmori_inox2d.so") or ""),
+    (wd ~= "" and (wd .. "/mori_live2d/native/inox2d_ffi/target/release/libmori_inox2d_ffi.so") or ""),
+
+    -- Relative to LÖVE source base directory (depends on how LÖVE was launched).
     base .. "/../../model/inochi2d/native/libmori_inox2d.so",
     base .. "/../native/inox2d_ffi/target/release/libmori_inox2d_ffi.so",
-    (wd ~= "" and (wd .. "/model/inochi2d/native/libmori_inox2d.so") or ""),
   }
   for _, p in ipairs(candidates) do
     if p ~= "" and file_exists(p) then

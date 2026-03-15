@@ -151,7 +151,7 @@ pub extern "C" fn inox_create(path: *const c_char, width: u32, height: u32) -> *
     let bytes = match std::fs::read(path_str) {
         Ok(b) => b,
         Err(e) => {
-            set_last_error(format!("inox_create: failed to read file: {e}"));
+            set_last_error(format!("inox_create: failed to read file '{path_str}': {e}"));
             return ptr::null_mut();
         }
     };

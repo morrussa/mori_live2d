@@ -34,6 +34,9 @@ local state = {
   mappingPath = "",
   ctrl = nil,
 
+  autoScreenshotPath = "",
+  autoScreenshotDone = false,
+
   status = "",
   err = "",
   renderer = "",
@@ -80,6 +83,17 @@ local function file_exists(path)
   return false
 end
 
+local function sanitize_path(p)
+  local s = tostring(p or "")
+  -- trim whitespace (common when copy/pasting or env vars contain newline)
+  s = (s:gsub("^%s+", ""):gsub("%s+$", ""))
+  -- strip surrounding quotes
+  if (s:sub(1, 1) == '"' and s:sub(-1) == '"') or (s:sub(1, 1) == "'" and s:sub(-1) == "'") then
+    s = s:sub(2, -2)
+  end
+  return s
+end
+
 local function find_cjk_font_path()
   local env = os.getenv("MORI_FONT_PATH") or parse_arg("--font") or ""
   if env ~= "" and file_exists(env) then
@@ -113,6 +127,15 @@ local function default_path(rel)
   -- Source directory is: <repo>/mori_live2d/love2d_frontend
   local base = love.filesystem.getSourceBaseDirectory()
   return base .. "/" .. rel
+end
+
+local function repo_path(rel_from_repo_root)
+  local wd = love.filesystem.getWorkingDirectory and love.filesystem.getWorkingDirectory() or ""
+  if wd ~= "" then
+    return wd .. "/" .. rel_from_repo_root
+  end
+  -- fallback: behave like older versions
+  return default_path("../../" .. rel_from_repo_root)
 end
 
 function love.load()
@@ -151,7 +174,7 @@ function love.load()
 
   local liveDir = os.getenv("MORI_LIVE_DIR") or parse_arg("--live-dir") or ""
   if liveDir == "" then
-    liveDir = default_path("../../live")
+    liveDir = repo_path("live")
   end
 
   state.subtitlePath = os.getenv("MORI_SUBTITLE_PATH") or parse_arg("--subtitle") or ""
@@ -167,10 +190,15 @@ function love.load()
 
   state.puppetPath = os.getenv("MORI_PUPPET_PATH") or parse_arg("--puppet") or ""
   if state.puppetPath == "" then
-    state.puppetPath = default_path("../../model/inochi2d/puppets/aka/Aka.inx")
+    state.puppetPath = repo_path("model/inochi2d/puppets/aka/Aka.inx")
   end
+  state.puppetPath = sanitize_path(state.puppetPath)
 
   state.mappingPath = os.getenv("MORI_MAPPING_PATH") or parse_arg("--mapping") or ""
+  state.mappingPath = sanitize_path(state.mappingPath)
+
+  state.autoScreenshotPath = os.getenv("MORI_SCREENSHOT_PATH") or parse_arg("--screenshot") or ""
+  state.autoScreenshotPath = sanitize_path(state.autoScreenshotPath)
 
   if not inox.ok then
     state.err = tostring(inox.error or "inox2d ffi module not available")
@@ -178,6 +206,11 @@ function love.load()
   end
 
   local w, h = love.graphics.getDimensions()
+
+  if not file_exists(state.puppetPath) then
+    state.err = "puppet file not found: " .. tostring(state.puppetPath)
+    return
+  end
 
   local handle, perr = inox.create(state.puppetPath, w, h)
   if not handle then
@@ -306,6 +339,41 @@ function love.draw()
   else
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print("Inochi2D not initialized.", 12, 10)
+  end
+
+  if (not state.autoScreenshotDone) and state.autoScreenshotPath ~= "" and love.graphics.captureScreenshot then
+    state.autoScreenshotDone = true
+    local ok_ss, ss_err = pcall(function()
+      love.graphics.captureScreenshot(function(img)
+        local ok_enc, enc_err = pcall(function()
+          -- Love's ImageData:encode() writes via love.filesystem when given a filename.
+          -- For CI/headless runs we often want an absolute path (e.g. /tmp/out.png), so
+          -- encode to FileData and write bytes ourselves.
+          local fd = img:encode("png")
+          local bytes = fd and fd.getString and fd:getString() or nil
+          if not bytes then
+            error("ImageData:encode('png') did not return FileData")
+          end
+          local f, ferr = io.open(state.autoScreenshotPath, "wb")
+          if not f then
+            error("io.open failed: " .. tostring(ferr))
+          end
+          f:write(bytes)
+          f:close()
+        end)
+        if not ok_enc and enc_err then
+          state.err = "screenshot encode failed: " .. tostring(enc_err)
+          print("inochi2d> " .. state.err)
+        end
+        if love.event and love.event.quit then
+          love.event.quit(0)
+        end
+      end)
+    end)
+    if not ok_ss and ss_err then
+      state.err = "captureScreenshot failed: " .. tostring(ss_err)
+      print("inochi2d> " .. state.err)
+    end
   end
 
   love.graphics.setColor(1, 1, 1, 1)

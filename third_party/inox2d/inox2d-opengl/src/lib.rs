@@ -297,12 +297,16 @@ impl OpenglRenderer {
 					gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_COLOR);
 				}
 				BlendMode::ClipToLower => {
+					// Inochi2D `ClipToLower` is `SourceIn` (Porter-Duff): keep source only where destination alpha exists.
+					// Assumes premultiplied alpha textures.
 					gl.blend_equation(glow::FUNC_ADD);
-					gl.blend_func(glow::DST_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+					gl.blend_func(glow::DST_ALPHA, glow::ZERO);
 				}
 				BlendMode::SliceFromLower => {
-					gl.blend_equation(glow::FUNC_SUBTRACT);
-					gl.blend_func(glow::ONE_MINUS_DST_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+					// Inochi2D `SliceFromLower` is `SourceOut` (Porter-Duff): keep source only where destination alpha is empty.
+					// Assumes premultiplied alpha textures.
+					gl.blend_equation(glow::FUNC_ADD);
+					gl.blend_func(glow::ONE_MINUS_DST_ALPHA, glow::ZERO);
 				}
 			}
 		}
@@ -394,6 +398,13 @@ impl OpenglRenderer {
 				glow::UNSIGNED_INT_24_8,
 				None,
 			);
+			// Ensure the depth-stencil texture is complete for framebuffer attachment.
+			// Without explicit parameters, some drivers keep the default MIN_FILTER that requires mipmaps,
+			// resulting in an incomplete framebuffer and silently missing composite (eyes, etc).
+			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
 
 			self.attach_framebuffer_textures();
 		}
@@ -462,7 +473,7 @@ impl InoxRenderer for OpenglRenderer {
 			gl.stencil_func(glow::ALWAYS, 1, 0xff);
 			gl.disable(glow::STENCIL_TEST);
 		}
-		
+
 		self.pop_debug_group();
 	}
 
@@ -660,12 +671,12 @@ impl OpenglRenderer {
 		self.pop_debug_group();
 
 		self.push_debug_group("inox2d - end draw");
-		
+
 		let gl = &self.gl;
 		unsafe {
 			gl.bind_vertex_array(None);
 		}
-		
+
 		self.pop_debug_group();
 	}
 }

@@ -354,12 +354,20 @@ impl<'a, T: ReinterpValue> BindingReinterpolator<'a, T> {
 
 	#[inline]
 	fn major_cnt(&self, y_major: bool) -> usize {
-		if y_major { self.y_count } else { self.x_count }
+		if y_major {
+			self.y_count
+		} else {
+			self.x_count
+		}
 	}
 
 	#[inline]
 	fn minor_cnt(&self, y_major: bool) -> usize {
-		if y_major { self.x_count } else { self.y_count }
+		if y_major {
+			self.x_count
+		} else {
+			self.y_count
+		}
 	}
 
 	#[inline]
