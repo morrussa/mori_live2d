@@ -5,3 +5,6 @@
 	path = third_party/inochi-session
 	url = https://github.com/Inochi2D/inochi-session.git
 
+[submodule "third_party/inochi2d-c"]
+	path = third_party/inochi2d-c
+	url = https://github.com/Inochi2D/inochi2d-c.git
