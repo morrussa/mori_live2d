@@ -4,8 +4,10 @@ mod vertex_buffers;
 use std::collections::HashSet;
 use std::mem::swap;
 
+use glam::{vec3, Vec2, Vec3};
+
 use crate::node::{
-	components::{DeformStack, Mask, Masks, ZSort},
+	components::{DeformSource, DeformStack, Mask, Masks, Mesh, MeshGroup, TransformStore, ZSort},
 	drawables::{CompositeComponents, DrawableKind, TexturedMeshComponents},
 	InoxNodeUuid,
 };
@@ -31,6 +33,14 @@ pub struct CompositeRenderCtx {
 	pub zsorted_children_list: Vec<InoxNodeUuid>,
 }
 
+struct MeshGroupDeformCtx {
+	id: InoxNodeUuid,
+	targets: Vec<InoxNodeUuid>,
+	triangles: Vec<[usize; 3]>,
+	base_world: Vec<Vec2>,
+	delta_world: Vec<Vec2>,
+}
+
 /// Additional struct attached to a puppet for rendering.
 pub struct RenderCtx {
 	/// General compact data buffers for interfacing with the GPU.
@@ -39,6 +49,9 @@ pub struct RenderCtx {
 	/// - including standalone parts and composite parents,
 	/// - excluding (TODO: plain mesh masks) and composite children.
 	root_drawables_zsorted: Vec<InoxNodeUuid>,
+	mesh_groups: Vec<MeshGroupDeformCtx>,
+	scratch_deforms: Vec<Vec2>,
+	scratch_out: Vec<Vec2>,
 }
 
 impl RenderCtx {
@@ -55,7 +68,57 @@ impl RenderCtx {
 				}
 			});
 		}
-		// TODO: Further fill the set when Meshgroup is implemented.
+		let mesh_groups = {
+			fn scan_targets(nodes: &InoxNodeTree, comps: &World, id: InoxNodeUuid, out: &mut Vec<InoxNodeUuid>) {
+				if comps.get::<Mesh>(id).is_some() {
+					out.push(id);
+				}
+				// Deformers deform their children themselves; don't recurse into them to avoid double-deforming.
+				if comps.get::<MeshGroup>(id).is_some() {
+					return;
+				}
+				for child in nodes.get_children(id) {
+					scan_targets(nodes, comps, child.uuid, out);
+				}
+			}
+
+			let mut mesh_groups = Vec::new();
+			for node in nodes.pre_order_iter() {
+				if comps.get::<MeshGroup>(node.uuid).is_none() {
+					continue;
+				}
+
+				let mut targets = Vec::new();
+				for child in nodes.get_children(node.uuid) {
+					scan_targets(nodes, comps, child.uuid, &mut targets);
+				}
+
+				nodes_to_deform.insert(node.uuid);
+				for target in &targets {
+					nodes_to_deform.insert(*target);
+				}
+
+				let (triangles, vert_len) = match comps.get::<Mesh>(node.uuid) {
+					Some(mesh) => (
+						mesh.indices
+							.chunks_exact(3)
+							.map(|chunk| [chunk[0] as usize, chunk[1] as usize, chunk[2] as usize])
+							.collect::<Vec<_>>(),
+						mesh.vertices.len(),
+					),
+					None => (Vec::new(), 0),
+				};
+
+				mesh_groups.push(MeshGroupDeformCtx {
+					id: node.uuid,
+					targets,
+					triangles,
+					base_world: vec![Vec2::ZERO; vert_len],
+					delta_world: vec![Vec2::ZERO; vert_len],
+				});
+			}
+			mesh_groups
+		};
 
 		let mut vertex_buffers = VertexBuffers::default();
 
@@ -79,11 +142,6 @@ impl RenderCtx {
 								vert_len,
 							},
 						);
-
-						// TexturedMesh not deformed by any source does not need a DeformStack
-						if nodes_to_deform.contains(&node.uuid) {
-							comps.add(node.uuid, DeformStack::new(vert_len));
-						}
 					}
 					DrawableKind::Composite { .. } => {
 						// exclude non-drawable children
@@ -117,9 +175,21 @@ impl RenderCtx {
 		// similarly, populate later, before render
 		root_drawables_zsorted.resize(root_drawables_count, InoxNodeUuid(0));
 
+		// Add a DeformStack for every node that might receive deforms (params and/or mesh group deformers).
+		for node_id in nodes_to_deform {
+			let vert_len = match comps.get::<Mesh>(node_id) {
+				Some(mesh) => mesh.vertices.len(),
+				None => continue,
+			};
+			comps.add(node_id, DeformStack::new(vert_len));
+		}
+
 		Self {
 			vertex_buffers,
 			root_drawables_zsorted,
+			mesh_groups,
+			scratch_deforms: Vec::new(),
+			scratch_out: Vec::new(),
 		}
 	}
 
@@ -132,8 +202,149 @@ impl RenderCtx {
 		}
 	}
 
+	fn apply_mesh_groups(&mut self, nodes: &InoxNodeTree, comps: &mut World) {
+		const INSIDE_EPS: f32 = -1e-4;
+		const BOUNDS_EPS: f32 = 1e-4;
+
+		for mg in &mut self.mesh_groups {
+			// 1) compute base cage points and per-vertex delta (world space)
+			let any_delta = {
+				let Some(mesh) = comps.get::<Mesh>(mg.id) else {
+					continue;
+				};
+				let Some(transform) = comps.get::<TransformStore>(mg.id) else {
+					continue;
+				};
+
+				let vert_len = mesh.vertices.len();
+				mg.base_world.resize(vert_len, Vec2::ZERO);
+				mg.delta_world.resize(vert_len, Vec2::ZERO);
+
+				self.scratch_deforms.resize(vert_len, Vec2::ZERO);
+				if let Some(stack) = comps.get::<DeformStack>(mg.id) {
+					stack.combine(nodes, comps, &mut self.scratch_deforms);
+				} else {
+					self.scratch_deforms.fill(Vec2::ZERO);
+				}
+
+				let mut any_delta = false;
+				for (i, v) in mesh.vertices.iter().enumerate() {
+					let base_local = *v - mesh.origin;
+					let base_world = transform
+						.absolute
+						.transform_point3(vec3(base_local.x, base_local.y, 0.0))
+						.truncate();
+
+					let deform_local = self.scratch_deforms[i];
+					let deformed_local = base_local + deform_local;
+					let deformed_world = transform
+						.absolute
+						.transform_point3(vec3(deformed_local.x, deformed_local.y, 0.0))
+						.truncate();
+
+					let delta_world = deformed_world - base_world;
+
+					mg.base_world[i] = base_world;
+					mg.delta_world[i] = delta_world;
+
+					if !any_delta && delta_world.length_squared() > 0.0 {
+						any_delta = true;
+					}
+				}
+				any_delta
+			};
+
+			if !any_delta || mg.triangles.is_empty() {
+				continue;
+			}
+
+			// 2) deform targets (local space), using barycentric weights on the base cage triangles.
+			let source = DeformSource::Node(mg.id);
+
+			for &target_id in &mg.targets {
+				let mut target_vert_len = 0usize;
+
+				{
+					let Some(mesh) = comps.get::<Mesh>(target_id) else {
+						continue;
+					};
+					let Some(transform) = comps.get::<TransformStore>(target_id) else {
+						continue;
+					};
+
+					target_vert_len = mesh.vertices.len();
+
+					self.scratch_deforms.resize(target_vert_len, Vec2::ZERO);
+					if let Some(stack) = comps.get::<DeformStack>(target_id) {
+						stack.combine(nodes, comps, &mut self.scratch_deforms);
+					} else {
+						self.scratch_deforms.fill(Vec2::ZERO);
+					}
+
+					self.scratch_out.resize(target_vert_len, Vec2::ZERO);
+					self.scratch_out.fill(Vec2::ZERO);
+
+					let inv_target_transform = transform.absolute.inverse();
+
+					for (j, v) in mesh.vertices.iter().enumerate() {
+						let base_local = *v - mesh.origin;
+						let deformed_local = base_local + self.scratch_deforms[j];
+						let p_world = transform
+							.absolute
+							.transform_point3(vec3(deformed_local.x, deformed_local.y, 0.0))
+							.truncate();
+
+						for [i0, i1, i2] in &mg.triangles {
+							if *i0 >= mg.base_world.len() || *i1 >= mg.base_world.len() || *i2 >= mg.base_world.len() {
+								continue;
+							}
+
+							let a = mg.base_world[*i0];
+							let b = mg.base_world[*i1];
+							let c = mg.base_world[*i2];
+
+							let min_x = a.x.min(b.x.min(c.x)) - BOUNDS_EPS;
+							let max_x = a.x.max(b.x.max(c.x)) + BOUNDS_EPS;
+							let min_y = a.y.min(b.y.min(c.y)) - BOUNDS_EPS;
+							let max_y = a.y.max(b.y.max(c.y)) + BOUNDS_EPS;
+
+							if p_world.x < min_x || p_world.x > max_x || p_world.y < min_y || p_world.y > max_y {
+								continue;
+							}
+
+							let Some(bc) = barycentric(a, b, c, p_world) else {
+								continue;
+							};
+							if bc.x < INSIDE_EPS || bc.y < INSIDE_EPS || bc.z < INSIDE_EPS {
+								continue;
+							}
+
+							let delta_world = mg.delta_world[*i0] * bc.x
+								+ mg.delta_world[*i1] * bc.y
+								+ mg.delta_world[*i2] * bc.z;
+
+							let delta_local = inv_target_transform
+								.transform_vector3(vec3(delta_world.x, delta_world.y, 0.0))
+								.truncate();
+							self.scratch_out[j] = delta_local;
+							break;
+						}
+					}
+				}
+
+				let Some(target_stack) = comps.get_mut::<DeformStack>(target_id) else {
+					continue;
+				};
+				let out = target_stack.begin_direct(source);
+				out.copy_from_slice(&self.scratch_out[..target_vert_len]);
+			}
+		}
+	}
+
 	/// Update zsort-ordered info and deform buffer content inside self, according to updated puppet.
 	pub(crate) fn update(&mut self, nodes: &InoxNodeTree, comps: &mut World) {
+		self.apply_mesh_groups(nodes, comps);
+
 		let mut root_drawable_uuid_zsort_vec = Vec::<(InoxNodeUuid, f32)>::new();
 
 		// root is definitely not a drawable.
@@ -203,6 +414,30 @@ impl RenderCtx {
 			.zip(root_drawable_uuid_zsort_vec.iter())
 			.for_each(|(old, new)| *old = new.0);
 	}
+}
+
+fn barycentric(a: Vec2, b: Vec2, c: Vec2, p: Vec2) -> Option<Vec3> {
+	// https://gamemath.com/book/geomprims.html#barycentric_coordinates
+	let v0 = b - a;
+	let v1 = c - a;
+	let v2 = p - a;
+
+	let d00 = v0.dot(v0);
+	let d01 = v0.dot(v1);
+	let d11 = v1.dot(v1);
+	let d20 = v2.dot(v0);
+	let d21 = v2.dot(v1);
+
+	let denom = d00 * d11 - d01 * d01;
+	if denom.abs() < 1e-8 {
+		return None;
+	}
+
+	let v = (d11 * d20 - d01 * d21) / denom;
+	let w = (d00 * d21 - d01 * d20) / denom;
+	let u = 1.0 - v - w;
+
+	Some(Vec3::new(u, v, w))
 }
 
 /// Same as the reference Inochi2D implementation, Inox2D also aims for a "bring your own rendering backend" design.

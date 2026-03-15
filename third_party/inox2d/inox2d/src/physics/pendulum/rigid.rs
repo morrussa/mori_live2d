@@ -34,6 +34,13 @@ impl Pendulum for RigidPendulumCtx {
 	}
 
 	fn tick(&mut self, props: &SimplePhysicsProps, anchor: Vec2, t: f32, dt: f32) -> Vec2 {
+		if !self.initialized {
+			self.bob = anchor + vec2(0.0, props.1.props.length);
+			self.state.vars.θ = 0.0;
+			self.state.vars.ω = 0.0;
+			self.initialized = true;
+		}
+
 		// Compute the angle against the updated anchor position
 		let d_bob = self.bob - anchor;
 		self.state.vars.θ = f32::atan2(-d_bob.x, d_bob.y);

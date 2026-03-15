@@ -167,12 +167,14 @@ impl Default for PhysicsProps {
 pub(crate) struct RigidPendulumCtx {
 	pub bob: Vec2,
 	pub state: PhysicsState<2, RigidPendulum>,
+	pub initialized: bool,
 }
 
 /// Physical states for simulating a spring pendulum.
 #[derive(Default)]
 pub(crate) struct SpringPendulumCtx {
 	pub state: PhysicsState<4, SpringPendulum>,
+	pub initialized: bool,
 }
 
 /* --- TEXTURED MESH --- */
@@ -196,6 +198,16 @@ pub struct Mesh {
 	pub indices: Vec<u32>,
 	/// Origin of the mesh.
 	pub origin: Vec2,
+}
+
+/* --- MESH GROUP --- */
+
+/// Inochi2D "MeshGroup" node (a cage-style deformer).
+///
+/// The mesh itself is stored in the regular [`Mesh`] component.
+pub struct MeshGroup {
+	pub dynamic_deformation: bool,
+	pub translate_children: bool,
 }
 
 /* --- DEFORM STACK --- */

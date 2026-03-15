@@ -36,6 +36,12 @@ impl Pendulum for SpringPendulumCtx {
 	}
 
 	fn tick(&mut self, props: &SimplePhysicsProps, anchor: Vec2, t: f32, dt: f32) -> Vec2 {
+		if !self.initialized {
+			self.state.vars.bob_pos = anchor + vec2(0.0, props.1.props.length);
+			self.state.vars.bob_vel = Vec2::ZERO;
+			self.initialized = true;
+		}
+
 		// Run the spring pendulum simulation
 		self.state.tick(&eval, (props.0, &props.1.props), &anchor, t, dt);
 

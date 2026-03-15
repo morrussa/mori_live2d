@@ -9,8 +9,8 @@
 
 已知限制（很重要）：
 
-- 当前使用的 Inox2D（上游 `third_party/inox2d`）仍处于原型期，**部分新特性（例如 MeshGroup / 动画）未实现**，可能导致“模型部分不渲染”（常见现象：上半身/某些部件缺失）。
-- 可用 `python3 -m mori_live2d.cli inspect-puppet /path/to/puppet.inx --dump-json /tmp/payload.json` 快速查看模型里有哪些 `node.type`；如果出现 `MeshGroup` 等未知类型，基本可以判定为上游未支持。
+- 当前使用的 Inox2D（上游 `third_party/inox2d`）仍处于原型期；当前已实现 `MeshGroup`（基础 cage deformation），但**动画等特性仍未实现**，仍可能导致“模型部分不渲染”（常见现象：上半身/某些部件缺失）。
+- 可用 `python3 -m mori_live2d.cli inspect-puppet /path/to/puppet.inx --dump-json /tmp/payload.json` 快速查看模型里有哪些 `node.type`；如果出现除 `MeshGroup` 之外的未知类型，基本可以判定为当前实现未支持。
 - 上游状态说明见：`mori_live2d/third_party/inox2d/README.md`（建议先用 Aka/Midori 验证渲染链路没问题）。
 
 ## 1) 启动 Love2D 前端（当前默认）

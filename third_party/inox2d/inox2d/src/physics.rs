@@ -42,17 +42,25 @@ impl<T: SimplePhysicsCtx> SimplePhysicsCtxCommon for T {
 	fn update(&mut self, props: &SimplePhysicsProps, transform: &TransformStore, t: f32, dt: f32) -> Vec2 {
 		// Timestep is limited to 10 seconds.
 		// If you're getting 0.1 FPS, you have bigger issues to deal with.
-		let mut dt = dt.min(10.);
+		let mut h = dt.min(10.0);
 
 		let anchor = self.calc_anchor(props, transform);
 
 		// Minimum physics timestep: 0.01s. If not satisfied, break simulation into steps.
 		let mut t = t;
-		while dt > 0. {
-			self.tick(props, &anchor, t, dt.min(0.01));
+		while h > 0.01 {
+			self.tick(props, &anchor, t, 0.01);
 			t += 0.01;
-			dt -= 0.01;
+			h -= 0.01;
 		}
+
+		if h < 0.0 {
+			h = 0.0;
+		}
+
+		// Match Inochi2D behavior: always run one final tick (even if h == 0.0) so the driver can
+		// update its output for the current anchor.
+		self.tick(props, &anchor, t, h);
 
 		self.calc_output(props, transform, anchor)
 	}
@@ -92,9 +100,7 @@ impl PhysicsCtx {
 	) -> HashMap<String, Vec2> {
 		let mut values_to_apply = HashMap::new();
 
-		if dt == 0. {
-			return values_to_apply;
-		} else if dt < 0. {
+		if dt < 0.0 {
 			panic!("Time travel has happened.");
 		}
 
@@ -134,5 +140,77 @@ impl PhysicsCtx {
 		self.t += dt;
 
 		values_to_apply
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use glam::{Mat4, Vec2, Vec3};
+
+	use crate::node::components::{PhysicsParamMapMode, PhysicsProps};
+	use crate::params::ParamUuid;
+
+	fn make_props(length: f32) -> (PuppetPhysics, SimplePhysics) {
+		let puppet_physics = PuppetPhysics {
+			pixels_per_meter: 1.0,
+			gravity: 9.81,
+		};
+
+		let simple_physics = SimplePhysics {
+			param: ParamUuid(0),
+			model_type: PhysicsModel::RigidPendulum,
+			map_mode: PhysicsParamMapMode::XY,
+			props: PhysicsProps {
+				gravity: 1.0,
+				length,
+				frequency: 1.0,
+				angle_damping: 0.5,
+				length_damping: 0.5,
+				output_scale: Vec2::ONE,
+			},
+			local_only: false,
+		};
+
+		(puppet_physics, simple_physics)
+	}
+
+	#[test]
+	fn rigid_pendulum_initializes_to_rest_output_at_dt_zero() {
+		let (puppet_physics, simple_physics) = make_props(100.0);
+		let props = (&puppet_physics, &simple_physics);
+
+		let transform = TransformStore {
+			absolute: Mat4::from_translation(Vec3::new(50.0, 20.0, 0.0)),
+			relative: Default::default(),
+		};
+
+		let mut ctx = RigidPendulumCtx::default();
+		let out = ctx.update(&props, &transform, 0.0, 0.0);
+
+		assert_eq!(out, Vec2::ZERO);
+		assert!(ctx.initialized);
+		assert_eq!(ctx.bob, Vec2::new(50.0, 120.0));
+	}
+
+	#[test]
+	fn spring_pendulum_initializes_to_rest_output_at_dt_zero() {
+		let (puppet_physics, mut simple_physics) = make_props(100.0);
+		simple_physics.model_type = PhysicsModel::SpringPendulum;
+		let props = (&puppet_physics, &simple_physics);
+
+		let transform = TransformStore {
+			absolute: Mat4::from_translation(Vec3::new(-25.0, 10.0, 0.0)),
+			relative: Default::default(),
+		};
+
+		let mut ctx = SpringPendulumCtx::default();
+		let out = ctx.update(&props, &transform, 0.0, 0.0);
+
+		assert_eq!(out, Vec2::ZERO);
+		assert!(ctx.initialized);
+		assert_eq!(ctx.state.vars.bob_pos, Vec2::new(-25.0, 110.0));
+		assert_eq!(ctx.state.vars.bob_vel, Vec2::ZERO);
 	}
 }

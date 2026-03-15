@@ -74,7 +74,7 @@ def summarize_puppet_payload(payload: dict[str, Any], *, path: Path) -> PuppetSu
         else:
             node_types["(missing)"] += 1
 
-    supported = {"Node", "Part", "Composite", "SimplePhysics"}
+    supported = {"Node", "Part", "Composite", "SimplePhysics", "MeshGroup"}
     unknown = sorted([t for t in node_types.keys() if t not in supported and t != "(missing)"])
 
     return PuppetSummary(
@@ -84,4 +84,3 @@ def summarize_puppet_payload(payload: dict[str, Any], *, path: Path) -> PuppetSu
         unknown_node_types=unknown,
         param_count=param_count,
     )
-

@@ -332,6 +332,17 @@ impl Puppet {
 				self.node_comps.add(id, deserialize_drawable(data)?);
 				self.node_comps.add(id, Composite {});
 			}
+			"MeshGroup" => {
+				self.node_comps.add(
+					id,
+					MeshGroup {
+						dynamic_deformation: data.get_bool("dynamic_deformation").unwrap_or_default(),
+						translate_children: data.get_bool("translate_children").unwrap_or_default(),
+					},
+				);
+				let mesh = vals("mesh", deserialize_mesh(data.get_object("mesh")?))?;
+				self.node_comps.add(id, mesh);
+			}
 			"SimplePhysics" => {
 				self.node_comps.add(id, deserialize_simple_physics(data)?);
 			}
@@ -390,19 +401,23 @@ fn deserialize_params(vals: &[json::JsonValue]) -> InoxParseResult<HashMap<Strin
 
 fn deserialize_param(obj: JsonObject) -> InoxParseResult<(String, Param)> {
 	let name = obj.get_str("name")?.to_owned();
-	Ok((
-		name.clone(),
-		Param {
-			uuid: ParamUuid(obj.get_u32("uuid")?),
-			name,
-			is_vec2: obj.get_bool("is_vec2")?,
-			min: obj.get_vec2("min")?,
-			max: obj.get_vec2("max")?,
-			defaults: obj.get_vec2("defaults")?,
-			axis_points: deserialize_axis_points(obj.get_list("axis_points")?)?,
-			bindings: deserialize_bindings(obj.get_list("bindings")?)?,
-		},
-	))
+
+	let mut param = Param {
+		uuid: ParamUuid(obj.get_u32("uuid")?),
+		name,
+		is_vec2: obj.get_bool("is_vec2")?,
+		min: obj.get_vec2("min")?,
+		max: obj.get_vec2("max")?,
+		defaults: obj.get_vec2("defaults")?,
+		axis_points: deserialize_axis_points(obj.get_list("axis_points")?)?,
+		bindings: deserialize_bindings(obj.get_list("bindings")?)?,
+	};
+
+	// Inochi2D payloads commonly store sparse binding keypoints with an `isSet` mask.
+	// Fill unset keypoints now for better compatibility (especially for 2D params).
+	param.reinterpolate_bindings();
+
+	Ok((param.name.clone(), param))
 }
 
 fn deserialize_bindings(vals: &[json::JsonValue]) -> InoxParseResult<Vec<Binding>> {
@@ -433,9 +448,15 @@ fn deserialize_binding(obj: JsonObject) -> InoxParseResult<Binding> {
 		node: InoxNodeUuid(obj.get_u32("node")?),
 		is_set: Matrix2d::from_slice_vecs(&is_set, true)?,
 		interpolate_mode: match obj.get_str("interpolate_mode")? {
-			"Linear" => InterpolateMode::Linear,
-			"Nearest" => InterpolateMode::Nearest,
-			a => return Err(InoxParseError::UnknownInterpolateMode(a.to_owned())),
+			"Linear" | "linear" => InterpolateMode::Linear,
+			"Nearest" | "nearest" => InterpolateMode::Nearest,
+			"Stepped" | "stepped" => InterpolateMode::Stepped,
+			"Bezier" | "bezier" | "Quadratic" | "quadratic" => InterpolateMode::Quadratic,
+			"Cubic" | "cubic" => InterpolateMode::Cubic,
+			unknown => {
+				tracing::warn!("Unknown interpolate mode {unknown:?}, falling back to Linear");
+				InterpolateMode::Linear
+			}
 		},
 		values: deserialize_binding_values(obj.get_str("param_name")?, obj.get_list("values")?)?,
 	})

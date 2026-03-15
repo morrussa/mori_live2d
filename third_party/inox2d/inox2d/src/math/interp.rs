@@ -6,7 +6,12 @@ pub enum InterpolateMode {
 	Nearest,
 	/// Linear interpolation
 	Linear,
-	// there's more but I'm not adding them for now.
+	/// Snap to the current active keypoint
+	Stepped,
+	/// Quadratic/Bezier-like interpolation (not fully implemented; falls back to Linear in some places)
+	Quadratic,
+	/// Cubic interpolation (not fully implemented; some callers may treat as Linear)
+	Cubic,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -67,7 +72,12 @@ fn interpolate_linear(t: f32, range_in: InterpRange<f32>, range_out: InterpRange
 		range_in.end,
 	);
 
-	(t - range_in.beg) * (range_out.end - range_out.beg) / (range_in.end - range_in.beg) + range_out.beg
+	let denom = range_in.end - range_in.beg;
+	if denom.abs() <= f32::EPSILON {
+		return range_out.beg;
+	}
+	let tt = (t - range_in.beg) / denom;
+	tt * (range_out.end - range_out.beg) + range_out.beg
 }
 
 #[inline]
@@ -75,6 +85,9 @@ pub fn interpolate_f32(t: f32, range_in: InterpRange<f32>, range_out: InterpRang
 	match mode {
 		InterpolateMode::Nearest => interpolate_nearest(t, range_in, range_out),
 		InterpolateMode::Linear => interpolate_linear(t, range_in, range_out),
+		InterpolateMode::Stepped => range_out.beg,
+		InterpolateMode::Quadratic => interpolate_linear(t, range_in, range_out),
+		InterpolateMode::Cubic => interpolate_linear(t, range_in, range_out),
 	}
 }
 

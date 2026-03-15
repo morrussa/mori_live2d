@@ -27,6 +27,7 @@ impl<T> Matrix2d<T> {
 	}
 
 	pub fn get_mut(&mut self, ix: usize, iy: usize) -> Option<&mut T> {
+		let (ix, iy) = if self.transposed { (iy, ix) } else { (ix, iy) };
 		self.data.get_mut(iy * self.width + ix)
 	}
 }

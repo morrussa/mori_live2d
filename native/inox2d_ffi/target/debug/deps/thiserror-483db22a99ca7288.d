@@ -1,0 +1,14 @@
+/home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/deps/thiserror-483db22a99ca7288.d: /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/build/thiserror-3c41acae6a8d26a0/out/private.rs
+
+/home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/deps/libthiserror-483db22a99ca7288.rlib: /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/build/thiserror-3c41acae6a8d26a0/out/private.rs
+
+/home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/deps/libthiserror-483db22a99ca7288.rmeta: /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/build/thiserror-3c41acae6a8d26a0/out/private.rs
+
+/home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs:
+/home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs:
+/home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs:
+/home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs:
+/home/morusa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs:
+/home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/build/thiserror-3c41acae6a8d26a0/out/private.rs:
+
+# env-dep:OUT_DIR=/home/morusa/AI/mori/mori_live2d/native/inox2d_ffi/target/debug/build/thiserror-3c41acae6a8d26a0/out

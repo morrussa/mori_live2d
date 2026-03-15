@@ -39,6 +39,28 @@ impl DeformStack {
 		linear_combine(direct_deforms, result);
 	}
 
+	/// Begins writing a direct deform for `src`, reusing the previous frame's allocation if possible.
+	///
+	/// The returned slice is sized to this stack's `deform_len`. Callers should fully overwrite it.
+	pub(crate) fn begin_direct(&mut self, src: DeformSource) -> &mut [Vec2] {
+		let deform_len = self.deform_len;
+		let (enabled, deform) = self
+			.stack
+			.entry(src)
+			.or_insert_with(|| (false, Deform::Direct(vec![Vec2::ZERO; deform_len])));
+
+		if *enabled {
+			panic!("A same source submitted deform twice for a same node within one frame.")
+		}
+		*enabled = true;
+
+		let Deform::Direct(ref mut direct) = deform;
+		if direct.len() != deform_len {
+			direct.resize(deform_len, Vec2::ZERO);
+		}
+		direct.as_mut_slice()
+	}
+
 	/// Submit a deform from a source for a node.
 	pub(crate) fn push(&mut self, src: DeformSource, mut deform: Deform) {
 		let Deform::Direct(ref direct_deform) = deform;

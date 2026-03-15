@@ -114,7 +114,7 @@ def main() -> int:
             print("unknown_types>")
             for t in summary.unknown_node_types:
                 print(f"  - {t}")
-            print("note> Inox2D currently only implements Node/Part/Composite/SimplePhysics in this repo; unknown node types may not render.")
+            print("note> Inox2D currently implements Node/Part/Composite/SimplePhysics/MeshGroup in this repo; unknown node types may not render.")
         return 0
 
     raise SystemExit(2)
