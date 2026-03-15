@@ -27,6 +27,8 @@ python3 -m mori_live2d.cli build-inochi2d-c
 love mori_live2d/love2d_frontend
 ```
 
+运行后也可以直接把 `.inx/.inp` 文件拖进窗口来切换皮套（方便快速验证导入）。
+
 默认会读取：
 
 - `live/subtitle.txt`
