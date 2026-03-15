@@ -1,0 +1,7 @@
+[submodule "third_party/inochi2d"]
+	path = third_party/inochi2d
+	url = https://github.com/Inochi2D/inochi2d.git
+[submodule "third_party/inochi-session"]
+	path = third_party/inochi-session
+	url = https://github.com/Inochi2D/inochi-session.git
+
