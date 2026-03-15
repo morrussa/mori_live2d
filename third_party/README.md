@@ -2,9 +2,7 @@
 
 这里放 Inochi2D 相关的上游代码（以 submodule 形式拉取）：
 
-- `inochi2d`：Inochi2D SDK（含 C FFI/Bindings）
-- `inochi2d-c`：Inochi2D 的 C ABI 运行时（可用于 Love2D/LuaJIT FFI 绑定）
-- `inochi-session`：Inochi2D 官方 VTubing 前端
+- `inox2d`：Inochi2D 的 Rust 实现（用于本项目的 Love2D 绑定）
 
 初始化（在 **mori_live2d 子仓库** 内）：
 

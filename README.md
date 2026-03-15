@@ -4,19 +4,19 @@
 
 当前策略：
 
-- **渲染前端使用 Love2D + `inochi2d-c`（LuaJIT FFI）**：加载 `.inx` 皮套、渲染，并做最小的“随机扭动 + 嘴形”驱动（参考 my-neuro 的思路）
+- **渲染前端使用 Love2D + Inox2D（LuaJIT FFI）**：加载 `.inx/.inp` 皮套、渲染，并做最小的“随机扭动 + 嘴形”驱动（参考 my-neuro 的思路）
 - Mori 侧保持最小集成：写字幕文件、生成 TTS 音频，方便 OBS 直接捕获与叠加
 
 ## 1) 启动 Love2D 前端（当前默认）
 
 前端目录：`mori_live2d/love2d_frontend/`。
 
-### 1.1 构建 `inochi2d-c` 运行时（必需）
+### 1.1 构建 Inox2D FFI 运行时（必需）
 
-需要本机安装 D 工具链（`dub` + `ldc2/ldc`）以及 OpenGL 相关依赖。构建后会把 `libinochi2d-c.so` 复制到 `model/inochi2d/native/`：
+需要本机安装 Rust 工具链（`cargo`）以及 OpenGL 相关依赖。构建后会把 `libmori_inox2d.so` 复制到 `model/inochi2d/native/`：
 
 ```bash
-python3 -m mori_live2d.cli build-inochi2d-c
+python3 -m mori_live2d.cli build-inox2d
 ```
 
 ### 1.2 运行 Love2D

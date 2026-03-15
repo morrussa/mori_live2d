@@ -1,7 +1,7 @@
--- Mori Inochi2D Love2D frontend (inochi2d-c + LuaJIT FFI).
+-- Mori Inochi2D Love2D frontend (Inox2D + LuaJIT FFI).
 --
 -- What works now:
---   - Loads and renders an Inochi2D puppet (.inx) via inochi2d-c (OpenGL).
+--   - Loads and renders an Inochi2D puppet (.inx/.inp) via Inox2D (Rust, OpenGL).
 --   - Polls Mori outputs and displays subtitle file.
 --   - Plays Mori-generated wav (from events.jsonl) and drives mouth-open (simple lipsync envelope).
 --   - Applies idle "random wiggle" similar to my-neuro (head roll/yaw/pitch if params are found).
@@ -12,7 +12,7 @@
 --   - Robust IPC (WebSocket/OSC) instead of polling files.
 --   - Proper transparency / OBS capture ergonomics.
 
-local inochi = require("inochi2d_c")
+local inox = require("inox2d")
 local liveio = require("mori_live_io")
 local lipsync = require("lipsync")
 local controller = require("controller")
@@ -28,11 +28,10 @@ local state = {
   playback = nil,
 
   puppetPath = "",
-  puppet = nil,
+  handle = nil,
   params = nil,
   paramByName = nil,
   mapping = nil,
-  camera = nil,
 
   status = "",
   err = "",
@@ -85,35 +84,21 @@ function love.load()
     state.puppetPath = default_path("../../model/inochi2d/puppets/aka/Aka.inx")
   end
 
-  if not inochi.ok then
-    state.err = tostring(inochi.error or "inochi2d-c ffi module not available")
-    return
-  end
-
-  local ok, err = inochi.init()
-  if not ok then
-    state.err = tostring(err or "failed to init inochi2d-c")
+  if not inox.ok then
+    state.err = tostring(inox.error or "inox2d ffi module not available")
     return
   end
 
   local w, h = love.graphics.getDimensions()
-  pcall(function()
-    inochi.set_viewport(w, h)
-  end)
 
-  state.camera = inochi.get_camera()
-  -- Reasonable defaults for Aka-like vtuber puppets.
-  inochi.camera_set_zoom(state.camera, 0.2)
-  inochi.camera_set_position(state.camera, 0.0, 1000.0)
-
-  local puppet, perr = inochi.load_puppet(state.puppetPath)
-  if not puppet then
+  local handle, perr = inox.create(state.puppetPath, w, h)
+  if not handle then
     state.err = tostring(perr or "failed to load puppet")
     return
   end
-  state.puppet = puppet
+  state.handle = handle
 
-  local params, by_name = inochi.get_parameters(puppet)
+  local params, by_name = inox.get_parameters(handle)
   state.params = params
   state.paramByName = by_name
   state.mapping = controller.make_mapping(by_name)
@@ -128,9 +113,9 @@ function love.load()
 end
 
 function love.resize(w, h)
-  if inochi.ok and state.puppet ~= nil then
+  if inox.ok and state.handle ~= nil then
     pcall(function()
-      inochi.set_viewport(w, h)
+      inox.resize(state.handle, w, h)
     end)
   end
 end
@@ -148,10 +133,20 @@ function love.update(dt)
     end
   end
 
-  if inochi.ok and state.puppet ~= nil then
+  if inox.ok and state.handle ~= nil then
     pcall(function()
-      inochi.update()
-      controller.apply_idle(inochi, state.mapping, state.t)
+      inox.begin_frame(state.handle)
+      local api = {
+        set_param = function(name, x, y)
+          return inox.set_param(state.handle, name, x, y)
+        end,
+      }
+      controller.apply_idle(api, state.mapping, state.t)
+      if state.playback then
+        local mouth = lipsync.update_mouth(state.playback)
+        controller.apply_mouth(api, state.mapping, mouth)
+      end
+      inox.end_frame(state.handle, dt)
     end)
   end
 
@@ -174,13 +169,8 @@ function love.update(dt)
   end
 
   -- Drive mouth while playing.
-  if state.playback and inochi.ok and state.puppet ~= nil then
-    local mouth = lipsync.update_mouth(state.playback)
-    controller.apply_mouth(inochi, state.mapping, mouth)
-    if not state.playback.source:isPlaying() then
-      state.playback = nil
-      controller.apply_mouth(inochi, state.mapping, 0.0)
-    end
+  if state.playback and (not state.playback.source:isPlaying()) then
+    state.playback = nil
   end
 end
 
@@ -188,9 +178,9 @@ function love.draw()
   local w, h = love.graphics.getDimensions()
   love.graphics.clear(0.06, 0.06, 0.08, 1.0)
 
-  if inochi.ok and state.puppet ~= nil then
+  if inox.ok and state.handle ~= nil then
     local ok_draw, derr = pcall(function()
-      inochi.draw_puppet(state.puppet, w, h)
+      inox.draw(state.handle)
     end)
     -- External GL calls may disturb LÖVE state; reset before drawing overlays.
     if love.graphics.reset then
@@ -205,7 +195,7 @@ function love.draw()
   end
 
   love.graphics.setColor(1, 1, 1, 1)
-  love.graphics.print("mori_live2d (inochi2d-c + Love2D)", 12, 10)
+  love.graphics.print("mori_live2d (Inox2D + Love2D)", 12, 10)
   love.graphics.print("renderer: " .. tostring(state.renderer), 12, 26)
   love.graphics.print("puppet: " .. tostring(state.puppetPath), 12, 42)
   love.graphics.print("subtitle: " .. tostring(state.subtitlePath), 12, 58)
@@ -235,7 +225,7 @@ function love.keypressed(key)
 end
 
 function love.filedropped(file)
-  if not (inochi.ok and state.puppet ~= nil) then
+  if not (inox.ok and state.handle ~= nil) then
     return
   end
   local filename = file:getFilename()
@@ -248,18 +238,19 @@ function love.filedropped(file)
     return
   end
 
-  inochi.destroy_puppet(state.puppet)
-  state.puppet = nil
+  local w, h = love.graphics.getDimensions()
+  inox.destroy(state.handle)
+  state.handle = nil
 
-  local puppet, perr = inochi.load_puppet(filename)
-  if not puppet then
+  local handle, perr = inox.create(filename, w, h)
+  if not handle then
     state.err = tostring(perr or "failed to load puppet: " .. tostring(filename))
     return
   end
 
   state.puppetPath = filename
-  state.puppet = puppet
-  local params, by_name = inochi.get_parameters(puppet)
+  state.handle = handle
+  local params, by_name = inox.get_parameters(handle)
   state.params = params
   state.paramByName = by_name
   state.mapping = controller.make_mapping(by_name)
@@ -268,8 +259,5 @@ function love.filedropped(file)
 end
 
 function love.quit()
-  if inochi.ok then
-    inochi.destroy_puppet(state.puppet)
-    inochi.shutdown()
-  end
+  inox.destroy(state.handle)
 end

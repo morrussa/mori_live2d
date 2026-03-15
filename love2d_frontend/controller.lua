@@ -71,7 +71,7 @@ function M.apply_idle(inochi, mapping, t)
     end
     local vv = clamp(v, -1.0, 1.0)
     local x = xmin + (vv + 1.0) * 0.5 * (xmax - xmin)
-    inochi.param_set(param, x, 0.0)
+    inochi.set_param(param.name, x, 0.0)
   end
 
   apply(mapping.head_roll, roll * 0.35)
@@ -90,8 +90,7 @@ function M.apply_mouth(inochi, mapping, mouth)
     xmin, xmax = 0.0, 1.0
   end
   local x = xmin + v * (xmax - xmin)
-  inochi.param_set(mapping.mouth_open, x, 0.0)
+  inochi.set_param(mapping.mouth_open.name, x, 0.0)
 end
 
 return M
-
