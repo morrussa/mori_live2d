@@ -30,6 +30,7 @@ def _parse_args() -> argparse.Namespace:
 
     p_run = sub.add_parser("run-session", help="Run Inochi Session executable.")
     p_run.add_argument("--bin", required=True, help="Path to inochi-session executable.")
+    p_run.add_argument("--x11", action="store_true", help="Force SDL_VIDEODRIVER=x11 (Wayland workaround).")
 
     return p.parse_args()
 
@@ -59,7 +60,8 @@ def main() -> int:
         return 0
 
     if args.cmd == "run-session":
-        proc = run_inochi_session(bin_path=Path(args.bin))
+        extra_env = {"SDL_VIDEODRIVER": "x11"} if bool(getattr(args, "x11", False)) else None
+        proc = run_inochi_session(bin_path=Path(args.bin), extra_env=extra_env)
         print(f"pid> {proc.pid}")
         proc.wait()
         return int(proc.returncode or 0)

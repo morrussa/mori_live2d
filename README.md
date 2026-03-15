@@ -17,6 +17,18 @@ python3 -m mori_live2d.cli install-session
 
 安装后会打印可执行文件路径（Linux 是 `inochi-session`，Windows 是 `inochi-session.exe`）。
 
+启动（如果你不想手动双击可执行文件）：
+
+```bash
+python3 -m mori_live2d.cli run-session --bin /path/to/inochi-session
+```
+
+如果你在 Linux 的 Wayland 桌面下启动失败，可尝试：
+
+```bash
+python3 -m mori_live2d.cli run-session --bin /path/to/inochi-session --x11
+```
+
 ## 2) 下载开源公共皮套（Aka / Midori，CC BY 4.0）
 
 下载官方示例模型到 `model/inochi2d/puppets/<name>/`（每个模型单独文件夹）：
