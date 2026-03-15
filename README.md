@@ -41,7 +41,46 @@ MORI_LIVE_DIR=/abs/path/to/live love mori_live2d/love2d_frontend
 MORI_SUBTITLE_PATH=/abs/path/to/live/subtitle.txt love mori_live2d/love2d_frontend
 MORI_EVENT_LOG=/abs/path/to/live/events.jsonl love mori_live2d/love2d_frontend
 MORI_PUPPET_PATH=/abs/path/to/model/inochi2d/puppets/aka/Aka.inx love mori_live2d/love2d_frontend
+MORI_MAPPING_PATH=/abs/path/to/puppet.mori-map love mori_live2d/love2d_frontend
 ```
+
+### 1.3 基本控制（热键）
+
+- `H`：显示/隐藏映射与调试信息（默认显示）
+- `I`：开关 Idle（头部随机扭动）
+- `F`：开关 Mouse Look（眼睛/头部跟随鼠标）
+- `B`：开关 Auto Blink（自动眨眼，需要找到眼睛开合参数）
+- `R`：重新加载参数映射（修改映射文件后按一次即可生效）
+
+### 1.4 参数映射（可选，但强烈建议）
+
+不同皮套的参数名可能不同；默认使用“关键词模糊匹配”去找 `head_* / mouth_open / eye_* / breath` 等参数。
+
+你可以提供一个映射覆盖文件（`MORI_MAPPING_PATH` 或 `--mapping`）来显式指定参数名。
+
+也支持“就近自动发现”：如果不传 `MORI_MAPPING_PATH`，会尝试在皮套同目录下寻找：
+
+- `<puppet>.mori-map`（例如 `Aka.inx.mori-map`）
+- `<puppet_basename>.mori-map`（例如 `Aka.mori-map`）
+- `<puppet_basename>.mori.lua`（Lua 表配置）
+
+#### 映射文件格式（`.mori-map`）
+
+简单的 `key = value` 文本，每行一个映射；支持 `#`/`;` 注释；在参数名前加 `!` 可反向（常用于左右/轴向相反的皮套）。
+
+示例：
+
+```ini
+head_yaw = Head::Yaw
+head_pitch = !Head::Pitch
+mouth_open = Mouth::Open
+eye_open_l = EyeL::Open
+eye_open_r = EyeR::Open
+eye_ball = Eye::Look
+breath = Breath
+```
+
+可用 key（不区分是否实际存在，找不到会自动跳过）：`head_roll`/`head_pitch`/`head_yaw`/`mouth_open`/`eye_ball`/`eye_ball_x`/`eye_ball_y`/`eye_open_l`/`eye_open_r`/`eye_open`/`breath`。
 
 ## 2) 下载开源公共皮套（Aka / Midori，CC BY 4.0）
 
@@ -72,7 +111,7 @@ python3 vtuber.py --tts --live-dir live
 - 捕获 Love2D 窗口作为“角色层”
 - 添加“文本（从文件读取）”来源，指向 `live/subtitle.txt` 作为“字幕层”
 
-> 备注：参数映射目前是“模糊匹配”（按参数名关键词找 Head/Mouth 等），不同皮套可能需要单独做映射配置（TODO）。
+> 备注：参数映射默认是“模糊匹配”（按参数名关键词找 Head/Mouth/Eye 等）；不同皮套建议单独提供 `.mori-map` 覆盖映射（见上文）。
 
 ## （可选）安装/运行 Inochi Session（官方前端）
 

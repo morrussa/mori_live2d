@@ -5,10 +5,10 @@
 --   - Polls Mori outputs and displays subtitle file.
 --   - Plays Mori-generated wav (from events.jsonl) and drives mouth-open (simple lipsync envelope).
 --   - Applies idle "random wiggle" similar to my-neuro (head roll/yaw/pitch if params are found).
+--   - Basic eye saccades + optional mouse look; auto blink if eye-open params are found.
 --
 -- TODO:
---   - Better parameter mapping per-puppet (config file).
---   - Blink/eye tracking, expressions and emotion mapping.
+--   - Rich expressions / emotion mapping.
 --   - Robust IPC (WebSocket/OSC) instead of polling files.
 --   - Proper transparency / OBS capture ergonomics.
 
@@ -31,11 +31,13 @@ local state = {
   handle = nil,
   params = nil,
   paramByName = nil,
-  mapping = nil,
+  mappingPath = "",
+  ctrl = nil,
 
   status = "",
   err = "",
   renderer = "",
+  showHelp = true,
 }
 
 local function parse_arg(flag)
@@ -84,6 +86,8 @@ function love.load()
     state.puppetPath = default_path("../../model/inochi2d/puppets/aka/Aka.inx")
   end
 
+  state.mappingPath = os.getenv("MORI_MAPPING_PATH") or parse_arg("--mapping") or ""
+
   if not inox.ok then
     state.err = tostring(inox.error or "inox2d ffi module not available")
     return
@@ -101,12 +105,19 @@ function love.load()
   local params, by_name = inox.get_parameters(handle)
   state.params = params
   state.paramByName = by_name
-  state.mapping = controller.make_mapping(by_name)
+  state.ctrl = controller.new(by_name, {
+    puppet_path = state.puppetPath,
+    mapping_path = state.mappingPath,
+    options = state.ctrl and state.ctrl.options or nil,
+  })
 
   print("inochi2d> loaded puppet: " .. tostring(state.puppetPath))
   print("inochi2d> parameters:")
   for _, p in ipairs(params or {}) do
     print(string.format("  - %s (vec2=%s) range=[%.3f..%.3f]", p.name, tostring(p.is_vec2), p.xmin, p.xmax))
+  end
+  if state.ctrl and state.ctrl.mapping and state.ctrl.mapping.__mapping_path and state.ctrl.mapping.__mapping_path ~= "" then
+    print("inochi2d> mapping override: " .. tostring(state.ctrl.mapping.__mapping_path))
   end
 
   state.status = "ready"
@@ -141,10 +152,18 @@ function love.update(dt)
           return inox.set_param(state.handle, name, x, y)
         end,
       }
-      controller.apply_idle(api, state.mapping, state.t)
-      if state.playback then
-        local mouth = lipsync.update_mouth(state.playback)
-        controller.apply_mouth(api, state.mapping, mouth)
+      if state.ctrl then
+        local mouth = 0.0
+        if state.playback then
+          mouth = lipsync.update_mouth(state.playback)
+        end
+        local w, h = love.graphics.getDimensions()
+        local mx, my = love.mouse.getPosition()
+        local nx = (mx / math.max(1, w) - 0.5) * 2.0
+        local ny = (my / math.max(1, h) - 0.5) * 2.0
+        controller.update(api, state.ctrl, dt, state.t, mouth, {
+          mouse = { x = nx, y = ny },
+        })
       end
       inox.end_frame(state.handle, dt)
     end)
@@ -208,6 +227,47 @@ function love.draw()
     love.graphics.print("error: " .. tostring(state.err), 12, 110)
     love.graphics.setColor(1, 1, 1, 1)
   end
+  if state.ctrl and state.ctrl.options then
+    local o = state.ctrl.options
+    love.graphics.print(
+      string.format(
+        "keys: [H] help  [I] idle:%s  [F] mouse:%s  [B] blink:%s  [R] reload map",
+        o.idle_enabled and "on" or "off",
+        o.mouse_look_enabled and "on" or "off",
+        o.blink_enabled and "on" or "off"
+      ),
+      12,
+      130
+    )
+  end
+
+  if state.showHelp and state.ctrl and state.ctrl.mapping then
+    local m = state.ctrl.mapping
+    local y = 150
+    local function show(label, entry)
+      if not entry then
+        return
+      end
+      local p = entry.param or entry
+      if p and p.name then
+        love.graphics.print(string.format("map> %-12s -> %s", label, tostring(p.name)), 12, y)
+        y = y + 16
+      end
+    end
+    show("head_yaw", m.head_yaw)
+    show("head_pitch", m.head_pitch)
+    show("head_roll", m.head_roll)
+    show("mouth_open", m.mouth_open)
+    show("eye_ball", m.eye_ball)
+    show("eye_open_l", m.eye_open_l)
+    show("eye_open_r", m.eye_open_r)
+    show("eye_open", m.eye_open)
+    show("breath", m.breath)
+    if m.__mapping_path and m.__mapping_path ~= "" then
+      love.graphics.print("map file: " .. tostring(m.__mapping_path), 12, y)
+      y = y + 16
+    end
+  end
 
   -- Subtitle overlay
   local padding = 18
@@ -221,6 +281,35 @@ end
 function love.keypressed(key)
   if key == "escape" then
     love.event.quit()
+    return
+  end
+  if key == "h" then
+    state.showHelp = not state.showHelp
+    return
+  end
+  if not (state.ctrl and state.ctrl.options) then
+    return
+  end
+  if key == "i" then
+    state.ctrl.options.idle_enabled = not state.ctrl.options.idle_enabled
+    return
+  end
+  if key == "f" then
+    state.ctrl.options.mouse_look_enabled = not state.ctrl.options.mouse_look_enabled
+    return
+  end
+  if key == "b" then
+    state.ctrl.options.blink_enabled = not state.ctrl.options.blink_enabled
+    return
+  end
+  if key == "r" and state.paramByName then
+    state.ctrl = controller.new(state.paramByName, {
+      puppet_path = state.puppetPath,
+      mapping_path = state.mappingPath,
+      options = state.ctrl and state.ctrl.options or nil,
+    })
+    state.err = ""
+    return
   end
 end
 
@@ -253,7 +342,11 @@ function love.filedropped(file)
   local params, by_name = inox.get_parameters(handle)
   state.params = params
   state.paramByName = by_name
-  state.mapping = controller.make_mapping(by_name)
+  state.ctrl = controller.new(by_name, {
+    puppet_path = state.puppetPath,
+    mapping_path = state.mappingPath,
+    options = state.ctrl and state.ctrl.options or nil,
+  })
   state.err = ""
   print("inochi2d> switched puppet: " .. tostring(filename))
 end
