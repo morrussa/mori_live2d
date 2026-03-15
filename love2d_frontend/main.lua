@@ -36,6 +36,7 @@ local state = {
 
   status = "",
   err = "",
+  renderer = "",
 }
 
 local function parse_arg(flag)
@@ -59,6 +60,9 @@ end
 function love.load()
   love.window.setTitle("mori_live2d - Inochi2D Love2D Frontend")
   love.window.setMode(900, 700, { resizable = true, vsync = true })
+
+  local rname, rver, rvendor, rdevice = love.graphics.getRendererInfo()
+  state.renderer = string.format("%s %s (%s)", tostring(rname), tostring(rver), tostring(rvendor))
 
   local liveDir = os.getenv("MORI_LIVE_DIR") or parse_arg("--live-dir") or ""
   if liveDir == "" then
@@ -202,9 +206,10 @@ function love.draw()
 
   love.graphics.setColor(1, 1, 1, 1)
   love.graphics.print("mori_live2d (inochi2d-c + Love2D)", 12, 10)
-  love.graphics.print("puppet: " .. tostring(state.puppetPath), 12, 30)
-  love.graphics.print("subtitle: " .. tostring(state.subtitlePath), 12, 50)
-  love.graphics.print("events: " .. tostring(state.eventLogPath), 12, 70)
+  love.graphics.print("renderer: " .. tostring(state.renderer), 12, 26)
+  love.graphics.print("puppet: " .. tostring(state.puppetPath), 12, 42)
+  love.graphics.print("subtitle: " .. tostring(state.subtitlePath), 12, 58)
+  love.graphics.print("events: " .. tostring(state.eventLogPath), 12, 74)
   if state.playback and state.playback.wav_path then
     love.graphics.print("tts wav: " .. tostring(state.playback.wav_path), 12, 90)
   end
