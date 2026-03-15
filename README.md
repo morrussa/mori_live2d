@@ -7,6 +7,12 @@
 - **渲染前端使用 Love2D + Inox2D（LuaJIT FFI）**：加载 `.inx/.inp` 皮套、渲染，并做最小的“随机扭动 + 嘴形”驱动（参考 my-neuro 的思路）
 - Mori 侧保持最小集成：写字幕文件、生成 TTS 音频，方便 OBS 直接捕获与叠加
 
+已知限制（很重要）：
+
+- 当前使用的 Inox2D（上游 `third_party/inox2d`）仍处于原型期，**部分新特性（例如 MeshGroup / 动画）未实现**，可能导致“模型部分不渲染”（常见现象：上半身/某些部件缺失）。
+- 可用 `python3 -m mori_live2d.cli inspect-puppet /path/to/puppet.inx --dump-json /tmp/payload.json` 快速查看模型里有哪些 `node.type`；如果出现 `MeshGroup` 等未知类型，基本可以判定为上游未支持。
+- 上游状态说明见：`mori_live2d/third_party/inox2d/README.md`（建议先用 Aka/Midori 验证渲染链路没问题）。
+
 ## 1) 启动 Love2D 前端（当前默认）
 
 前端目录：`mori_live2d/love2d_frontend/`。
@@ -41,7 +47,11 @@ MORI_LIVE_DIR=/abs/path/to/live love mori_live2d/love2d_frontend
 MORI_SUBTITLE_PATH=/abs/path/to/live/subtitle.txt love mori_live2d/love2d_frontend
 MORI_EVENT_LOG=/abs/path/to/live/events.jsonl love mori_live2d/love2d_frontend
 MORI_PUPPET_PATH=/abs/path/to/model/inochi2d/puppets/aka/Aka.inx love mori_live2d/love2d_frontend
+MORI_INOX2D_LIB=/abs/path/to/libmori_inox2d.so love mori_live2d/love2d_frontend
 MORI_MAPPING_PATH=/abs/path/to/puppet.mori-map love mori_live2d/love2d_frontend
+MORI_MOUSE_LOOK=1 love mori_live2d/love2d_frontend
+MORI_FONT_PATH=/abs/path/to/NotoSansCJK-Regular.ttc love mori_live2d/love2d_frontend
+MORI_UI_FONT_SIZE=14 MORI_SUBTITLE_FONT_SIZE=22 love mori_live2d/love2d_frontend
 ```
 
 ### 1.3 基本控制（热键）
@@ -51,6 +61,8 @@ MORI_MAPPING_PATH=/abs/path/to/puppet.mori-map love mori_live2d/love2d_frontend
 - `F`：开关 Mouse Look（眼睛/头部跟随鼠标）
 - `B`：开关 Auto Blink（自动眨眼，需要找到眼睛开合参数）
 - `R`：重新加载参数映射（修改映射文件后按一次即可生效）
+
+> 分布式/远程部署：建议默认关闭 Mouse Look；也可以用 `MORI_MOUSE_LOOK=0` 或启动参数 `--mouse-look off` 强制关闭。
 
 ### 1.4 参数映射（可选，但强烈建议）
 
@@ -105,6 +117,21 @@ python3 vtuber.py --tts --live-dir live
 - `live/subtitle.txt`：当前要显示的字幕
 - `live/events.jsonl`：每轮对话事件（含 wav 路径）
 - `live/audio/turn_XXXX.wav`：可选 TTS 音频
+
+### 3.1 一键启动（挂到 B 站直播间 + Love2D 前端 + 自动回复）
+
+在主仓库根目录运行（会默认开启 TTS，Love2D 前端会自动播放语音并驱动嘴形）：
+
+```bash
+python3 scripts/run_bili_vtuber_love2d.py --bilibili-room-id <room_id> --exit-when-offline
+```
+
+可选：
+
+- `--bilibili-room-url https://live.bilibili.com/<room_id>`
+- `--puppet /abs/path/to/xxx.inx`
+- `--mapping /abs/path/to/puppet.mori-map`
+- `--mouse-look off`（或环境变量 `MORI_MOUSE_LOOK=0`，分布式部署推荐）
 
 ## 4) OBS 最小配置建议
 

@@ -8,12 +8,12 @@ end
 
 local size_t_typ = ffi.abi("64bit") and "uint64_t" or "uint32_t"
 ffi.cdef(([[
-typedef unsigned char uint8_t;
-typedef unsigned int uint32_t;
-typedef unsigned long long uint64_t;
-typedef %s size_t;
-typedef _Bool bool;
-typedef int32_t int32;
+	typedef unsigned char uint8_t;
+	typedef unsigned int uint32_t;
+	typedef unsigned long long uint64_t;
+	typedef %s size_t;
+	typedef int int32_t;
+	typedef int32_t int32;
 
 typedef struct InoxHandle InoxHandle;
 
@@ -56,12 +56,14 @@ function M.find_library()
   end
 
   local base = love.filesystem.getSourceBaseDirectory()
+  local wd = love.filesystem.getWorkingDirectory and love.filesystem.getWorkingDirectory() or ""
   local candidates = {
     base .. "/../../model/inochi2d/native/libmori_inox2d.so",
     base .. "/../native/inox2d_ffi/target/release/libmori_inox2d_ffi.so",
+    (wd ~= "" and (wd .. "/model/inochi2d/native/libmori_inox2d.so") or ""),
   }
   for _, p in ipairs(candidates) do
-    if file_exists(p) then
+    if p ~= "" and file_exists(p) then
       return p
     end
   end
@@ -74,7 +76,9 @@ function M.load(lib_path)
   end
   local path = lib_path or M.find_library()
   if not path then
-    return false, "libmori_inox2d.so not found. Build it via: python3 -m mori_live2d.cli build-inox2d"
+    return false,
+      "libmori_inox2d.so not found. Build it via: python3 -m mori_live2d.cli build-inox2d "
+        .. "or set MORI_INOX2D_LIB=/abs/path/to/libmori_inox2d.so"
   end
   M.lib = ffi.load(path)
   return true
@@ -187,4 +191,3 @@ function M.get_parameters(handle)
 end
 
 return M
-

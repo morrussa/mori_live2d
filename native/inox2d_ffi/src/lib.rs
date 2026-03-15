@@ -182,9 +182,8 @@ pub extern "C" fn inox_create(path: *const c_char, width: u32, height: u32) -> *
 
     renderer.resize(width, height);
     renderer.camera.scale = Vec2::splat(0.15);
-    renderer.camera.position = vec2(0.0, 1000.0);
 
-    let params = build_param_cache(&model.puppet.params);
+    let params = build_param_cache(model.puppet.params());
 
     let handle = InoxHandle {
         model,
@@ -373,4 +372,3 @@ pub extern "C" fn inox_param_minmax(
     }
     1
 }
-

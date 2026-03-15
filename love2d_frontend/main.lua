@@ -38,6 +38,8 @@ local state = {
   err = "",
   renderer = "",
   showHelp = true,
+  uiFont = nil,
+  subtitleFont = nil,
 }
 
 local function parse_arg(flag)
@@ -52,6 +54,61 @@ local function parse_arg(flag)
   return nil
 end
 
+local function parse_bool(v)
+  if v == nil then
+    return nil
+  end
+  local s = string.lower(tostring(v))
+  if s == "" then
+    return nil
+  end
+  if s == "1" or s == "true" or s == "on" or s == "yes" or s == "y" then
+    return true
+  end
+  if s == "0" or s == "false" or s == "off" or s == "no" or s == "n" then
+    return false
+  end
+  return nil
+end
+
+local function file_exists(path)
+  local f = io.open(path, "rb")
+  if f then
+    f:close()
+    return true
+  end
+  return false
+end
+
+local function find_cjk_font_path()
+  local env = os.getenv("MORI_FONT_PATH") or parse_arg("--font") or ""
+  if env ~= "" and file_exists(env) then
+    return env
+  end
+
+  local candidates = {
+    -- Linux (Noto / WenQuanYi)
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    -- macOS
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/STHeiti Light.ttc",
+    -- Windows
+    "C:\\Windows\\Fonts\\msyh.ttc",
+    "C:\\Windows\\Fonts\\simhei.ttf",
+    "C:\\Windows\\Fonts\\simsun.ttc",
+  }
+  for _, p in ipairs(candidates) do
+    if file_exists(p) then
+      return p
+    end
+  end
+  return nil
+end
+
 local function default_path(rel)
   -- Source directory is: <repo>/mori_live2d/love2d_frontend
   local base = love.filesystem.getSourceBaseDirectory()
@@ -61,6 +118,33 @@ end
 function love.load()
   love.window.setTitle("mori_live2d - Inochi2D Love2D Frontend")
   love.window.setMode(900, 700, { resizable = true, vsync = true })
+
+  do
+    local ui_size = tonumber(os.getenv("MORI_UI_FONT_SIZE") or parse_arg("--ui-font-size") or "") or 14
+    local sub_size = tonumber(os.getenv("MORI_SUBTITLE_FONT_SIZE") or parse_arg("--subtitle-font-size") or "") or 22
+    local font_path = find_cjk_font_path()
+
+    local ok_ui, ui_font = pcall(function()
+      if font_path then
+        return love.graphics.newFont(font_path, ui_size)
+      end
+      return love.graphics.newFont(ui_size)
+    end)
+    local ok_sub, sub_font = pcall(function()
+      if font_path then
+        return love.graphics.newFont(font_path, sub_size)
+      end
+      return love.graphics.newFont(sub_size)
+    end)
+
+    if ok_ui and ui_font then
+      state.uiFont = ui_font
+      love.graphics.setFont(ui_font)
+    end
+    if ok_sub and sub_font then
+      state.subtitleFont = sub_font
+    end
+  end
 
   local rname, rver, rvendor, rdevice = love.graphics.getRendererInfo()
   state.renderer = string.format("%s %s (%s)", tostring(rname), tostring(rver), tostring(rvendor))
@@ -110,6 +194,12 @@ function love.load()
     mapping_path = state.mappingPath,
     options = state.ctrl and state.ctrl.options or nil,
   })
+  do
+    local v = parse_bool(os.getenv("MORI_MOUSE_LOOK") or parse_arg("--mouse-look"))
+    if v ~= nil and state.ctrl and state.ctrl.options then
+      state.ctrl.options.mouse_look_enabled = v
+    end
+  end
 
   print("inochi2d> loaded puppet: " .. tostring(state.puppetPath))
   print("inochi2d> parameters:")
@@ -157,10 +247,15 @@ function love.update(dt)
         if state.playback then
           mouth = lipsync.update_mouth(state.playback)
         end
-        local w, h = love.graphics.getDimensions()
-        local mx, my = love.mouse.getPosition()
-        local nx = (mx / math.max(1, w) - 0.5) * 2.0
-        local ny = (my / math.max(1, h) - 0.5) * 2.0
+        local nx, ny = 0.0, 0.0
+        if state.ctrl.options and state.ctrl.options.mouse_look_enabled and love.mouse and love.mouse.getPosition then
+          local w, h = love.graphics.getDimensions()
+          local ok, mx, my = pcall(love.mouse.getPosition)
+          if ok then
+            nx = (mx / math.max(1, w) - 0.5) * 2.0
+            ny = (my / math.max(1, h) - 0.5) * 2.0
+          end
+        end
         controller.update(api, state.ctrl, dt, state.t, mouth, {
           mouse = { x = nx, y = ny },
         })
@@ -269,13 +364,42 @@ function love.draw()
     end
   end
 
-  -- Subtitle overlay
-  local padding = 18
-  local boxH = 140
-  love.graphics.setColor(0, 0, 0, 0.45)
-  love.graphics.rectangle("fill", padding, h - boxH - padding, w - padding * 2, boxH, 16, 16)
-  love.graphics.setColor(1, 1, 1, 1)
-  love.graphics.printf(state.subtitle, padding + 14, h - boxH - padding + 14, w - padding * 2 - 28, "left")
+  -- Subtitle overlay (only show when there is text)
+  local subtitle = tostring(state.subtitle or "")
+  subtitle = subtitle:gsub("^%s+", ""):gsub("%s+$", "")
+  if subtitle ~= "" then
+    local padding = 12
+    local inner = 12
+    local font = state.subtitleFont or love.graphics.getFont()
+    local prev_font = state.uiFont or love.graphics.getFont()
+    if font then
+      love.graphics.setFont(font)
+    end
+
+    local wrapW = math.max(20, w - padding * 2 - inner * 2)
+    local _, lines = font:getWrap(subtitle, wrapW)
+    local lineH = font:getHeight() * (font:getLineHeight() or 1.0)
+    local textH = (#lines) * lineH
+
+    local boxH = textH + inner * 2
+    local maxH = math.floor(h * 0.45)
+    if boxH > maxH then
+      boxH = maxH
+    end
+    local boxY = h - boxH - padding
+
+    love.graphics.setColor(0, 0, 0, 0.42)
+    love.graphics.rectangle("fill", padding, boxY, w - padding * 2, boxH, 14, 14)
+    love.graphics.setColor(1, 1, 1, 1)
+
+    love.graphics.setScissor(padding, boxY, w - padding * 2, boxH)
+    love.graphics.printf(subtitle, padding + inner, boxY + inner, wrapW, "left")
+    love.graphics.setScissor()
+
+    if prev_font then
+      love.graphics.setFont(prev_font)
+    end
+  end
 end
 
 function love.keypressed(key)

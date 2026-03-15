@@ -19,6 +19,43 @@ local function file_exists(path)
   return false
 end
 
+local function strip_utf8_bom(s)
+  if type(s) ~= "string" then
+    return s
+  end
+  -- UTF-8 BOM: EF BB BF
+  if s:sub(1, 3) == "\239\187\191" then
+    return s:sub(4)
+  end
+  return s
+end
+
+local function sanitize_utf8_best_effort(s)
+  if type(s) ~= "string" then
+    return s
+  end
+  if not (_G.utf8 and utf8.len) then
+    return s
+  end
+  local ok, _len, pos = pcall(utf8.len, s)
+  if ok and _len ~= nil then
+    return s
+  end
+  -- Replace invalid bytes with '?', retry a few times.
+  local out = s
+  for _ = 1, 32 do
+    local len2, badpos = utf8.len(out)
+    if len2 ~= nil then
+      return out
+    end
+    if not badpos then
+      return out
+    end
+    out = out:sub(1, badpos - 1) .. "?" .. out:sub(badpos + 1)
+  end
+  return out
+end
+
 local function codepoint_to_utf8(cp)
   if _G.utf8 and utf8.char then
     return utf8.char(cp)
@@ -112,8 +149,11 @@ function M.read_subtitle(path)
     return nil
   end
   local s = tostring(raw)
+  s = strip_utf8_bom(s)
   s = s:gsub("\r\n", "\n")
+  s = s:gsub("\r", "\n")
   s = s:gsub("\n+$", "")
+  s = sanitize_utf8_best_effort(s)
   return s
 end
 
@@ -150,4 +190,3 @@ function M.poll_events(tail)
 end
 
 return M
-

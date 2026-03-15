@@ -7,10 +7,9 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-glam = "0.28"
-glow = "0.16"
+glam = "0.29.0"
+glow = "0.14.1"
 inox2d = { path = "../../third_party/inox2d/inox2d" }
 inox2d-opengl = { path = "../../third_party/inox2d/inox2d-opengl" }
 libloading = "0.8"
 once_cell = "1.19"
-

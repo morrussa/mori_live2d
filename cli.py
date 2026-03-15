@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .example_models import install_example_models
 from .inox2d_runtime import build_inox2d_ffi
 from .inochi_session import install_inochi_session, run_inochi_session
+from .puppet_inspect import read_inp_payload_json, summarize_puppet_payload
 
 
 def _default_root() -> Path:
@@ -44,6 +46,10 @@ def _parse_args() -> argparse.Namespace:
     p_run = sub.add_parser("run-session", help="Run Inochi Session executable.")
     p_run.add_argument("--bin", required=True, help="Path to inochi-session executable.")
     p_run.add_argument("--x11", action="store_true", help="Force SDL_VIDEODRIVER=x11 (Wayland workaround).")
+
+    p_inspect = sub.add_parser("inspect-puppet", help="Inspect a .inx/.inp puppet payload (node types / version).")
+    p_inspect.add_argument("path", help="Path to .inx/.inp file.")
+    p_inspect.add_argument("--dump-json", default="", help="Optional path to write payload.json for manual inspection.")
 
     return p.parse_args()
 
@@ -85,6 +91,31 @@ def main() -> int:
         print(f"pid> {proc.pid}")
         proc.wait()
         return int(proc.returncode or 0)
+
+    if args.cmd == "inspect-puppet":
+        puppet_path = Path(args.path).expanduser().resolve()
+        payload = read_inp_payload_json(puppet_path)
+        summary = summarize_puppet_payload(payload, path=puppet_path)
+        if str(args.dump_json or "").strip():
+            out = Path(args.dump_json).expanduser().resolve()
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"dump> {out}")
+
+        meta = summary.meta
+        print(f"path> {summary.path}")
+        print(f"meta.version> {meta.get('version')}")
+        print(f"meta.name> {meta.get('name')}")
+        print(f"params> {summary.param_count}")
+        print("node_types>")
+        for k, v in summary.node_type_counts.items():
+            print(f"  - {k}: {v}")
+        if summary.unknown_node_types:
+            print("unknown_types>")
+            for t in summary.unknown_node_types:
+                print(f"  - {t}")
+            print("note> Inox2D currently only implements Node/Part/Composite/SimplePhysics in this repo; unknown node types may not render.")
+        return 0
 
     raise SystemExit(2)
 
