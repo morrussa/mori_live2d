@@ -1,0 +1,8 @@
+{
+  "markdownlint.config": {
+    "no-inline-html": false,
+    "first-line-heading": false
+  },
+  "cSpell.enabled": false,
+  // "rust-analyzer.cargo.target": "wasm32-unknown-unknown"
+}

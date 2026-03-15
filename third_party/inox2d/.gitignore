@@ -1,0 +1,10 @@
+# Rust
+/target
+/Cargo.lock
+
+# Inochi2D project/model file
+*.inp
+*.inx
+
+# renderdoc capture file
+*.cap

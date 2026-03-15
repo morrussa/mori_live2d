@@ -1,3 +1,0 @@
-[submodule "third_party/inox2d"]
-	path = third_party/inox2d
-	url = https://github.com/Inochi2D/inox2d.git

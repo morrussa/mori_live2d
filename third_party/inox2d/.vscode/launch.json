@@ -1,0 +1,136 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'inox2d'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=inox2d"
+                ],
+                "filter": {
+                    "name": "inox2d",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'parse-inp'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=parse-inp",
+                    "--package=inox2d"
+                ],
+                "filter": {
+                    "name": "parse-inp",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'inox2d-opengl'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=inox2d-opengl"
+                ],
+                "filter": {
+                    "name": "inox2d-opengl",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'inox2d-wgpu'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=inox2d-wgpu"
+                ],
+                "filter": {
+                    "name": "inox2d-wgpu",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'render-opengl'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=render-opengl",
+                    "--package=render-opengl"
+                ],
+                "filter": {
+                    "name": "render-opengl",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "examples/render-webgl/assets/puppet.inp"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'render-webgl'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=render-webgl",
+                    "--package=render-webgl"
+                ],
+                "filter": {
+                    "name": "render-webgl",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'render-wgpu'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=render-wgpu",
+                    "--package=render-wgpu"
+                ],
+                "filter": {
+                    "name": "render-wgpu",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
