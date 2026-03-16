@@ -208,6 +208,21 @@ function M.make_mapping(param_by_name, opts)
   end
   local overrides = try_load_overrides(mapping_path)
 
+  local function auto_invert(key, param)
+    if not (key and param and param.name) then
+      return false
+    end
+    if key == "eye_open" or key == "eye_open_l" or key == "eye_open_r" then
+      local lower = string.lower(tostring(param.name))
+      -- Many puppets expose a "Blink" parameter where 0=open and 1=closed; our controller drives
+      -- an "eye_open" semantic (1=open), so auto-invert when we end up mapping to Blink.
+      if string.find(lower, "blink", 1, true) and not string.find(lower, "open", 1, true) then
+        return true
+      end
+    end
+    return false
+  end
+
   local function pick(key, fallback_tries, meta)
     local ov = overrides[key]
     if ov and type(ov.name) == "string" and ov.name ~= "" then
@@ -232,6 +247,7 @@ function M.make_mapping(param_by_name, opts)
           m[kk] = vv
         end
       end
+      m.invert = auto_invert(key, p)
       m.source = "fuzzy"
       return wrap_param(p, m)
     end
@@ -241,42 +257,94 @@ function M.make_mapping(param_by_name, opts)
   local m = {}
   m.__mapping_path = mapping_path
 
+  -- Prefer combined vec2 params when available (common in Inochi2D payloads).
+  m.head = pick(
+    "head",
+    {
+      { keywords = { "head", "yaw" }, opts = { require_vec2 = true } },
+      { keywords = { "head", "pitch" }, opts = { require_vec2 = true } },
+      { keywords = { "head" }, opts = { require_vec2 = true } },
+    },
+    { mode = "vec2_signed" }
+  )
+
+  m.body = pick(
+    "body",
+    {
+      { keywords = { "body", "yaw" }, opts = { require_vec2 = true } },
+      { keywords = { "body", "pitch" }, opts = { require_vec2 = true } },
+      { keywords = { "body" }, opts = { require_vec2 = true } },
+    },
+    { mode = "vec2_signed" }
+  )
+
   m.head_roll = pick(
     "head_roll",
     {
-      { keywords = { "head", "roll" } },
-      { keywords = { "angle", "z" } },
-      { keywords = { "rotation", "z" } },
+      { keywords = { "head", "roll" }, opts = { require_vec2 = false } },
+      { keywords = { "angle", "z" }, opts = { require_vec2 = false } },
+      { keywords = { "rotation", "z" }, opts = { require_vec2 = false } },
     },
     { mode = "signed" }
   )
   m.head_pitch = pick(
     "head_pitch",
     {
-      { keywords = { "head", "pitch" } },
-      { keywords = { "head", "tilt" } },
-      { keywords = { "angle", "x" } },
-      { keywords = { "rotation", "x" } },
+      { keywords = { "head", "pitch" }, opts = { require_vec2 = false } },
+      { keywords = { "head", "tilt" }, opts = { require_vec2 = false } },
+      { keywords = { "angle", "x" }, opts = { require_vec2 = false } },
+      { keywords = { "rotation", "x" }, opts = { require_vec2 = false } },
     },
     { mode = "signed" }
   )
   m.head_yaw = pick(
     "head_yaw",
     {
-      { keywords = { "head", "yaw" } },
-      { keywords = { "head", "turn" } },
-      { keywords = { "angle", "y" } },
-      { keywords = { "rotation", "y" } },
+      { keywords = { "head", "yaw" }, opts = { require_vec2 = false } },
+      { keywords = { "head", "turn" }, opts = { require_vec2 = false } },
+      { keywords = { "angle", "y" }, opts = { require_vec2 = false } },
+      { keywords = { "rotation", "y" }, opts = { require_vec2 = false } },
     },
     { mode = "signed" }
   )
+
+  m.body_roll = pick(
+    "body_roll",
+    {
+      { keywords = { "body", "roll" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "angle", "z" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "rotation", "z" }, opts = { require_vec2 = false } },
+    },
+    { mode = "signed" }
+  )
+  m.body_pitch = pick(
+    "body_pitch",
+    {
+      { keywords = { "body", "pitch" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "tilt" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "angle", "x" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "rotation", "x" }, opts = { require_vec2 = false } },
+    },
+    { mode = "signed" }
+  )
+  m.body_yaw = pick(
+    "body_yaw",
+    {
+      { keywords = { "body", "yaw" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "turn" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "angle", "y" }, opts = { require_vec2 = false } },
+      { keywords = { "body", "rotation", "y" }, opts = { require_vec2 = false } },
+    },
+    { mode = "signed" }
+  )
+
   m.mouth_open = pick(
     "mouth_open",
     {
-      { keywords = { "mouth", "open" } },
-      { keywords = { "jaw", "open" } },
-      { keywords = { "mouthopen" } },
-      { keywords = { "mouth" } },
+      { keywords = { "mouth", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "jaw", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "mouthopen" }, opts = { require_vec2 = false } },
+      { keywords = { "mouth" }, opts = { require_vec2 = false } },
     },
     { mode = "01" }
   )
@@ -294,18 +362,45 @@ function M.make_mapping(param_by_name, opts)
   m.eye_ball_x = pick(
     "eye_ball_x",
     {
-      { keywords = { "eye", "ball", "x" } },
-      { keywords = { "eye", "look", "x" } },
-      { keywords = { "eye", "x" } },
+      { keywords = { "eye", "ball", "x" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "look", "x" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "x" }, opts = { require_vec2 = false } },
     },
     { mode = "signed" }
   )
   m.eye_ball_y = pick(
     "eye_ball_y",
     {
-      { keywords = { "eye", "ball", "y" } },
-      { keywords = { "eye", "look", "y" } },
-      { keywords = { "eye", "y" } },
+      { keywords = { "eye", "ball", "y" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "look", "y" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "y" }, opts = { require_vec2 = false } },
+    },
+    { mode = "signed" }
+  )
+
+  -- Some puppets expose per-eye scalar movement parameters instead of a single vec2 "look" param.
+  m.eye_move_l = pick(
+    "eye_move_l",
+    {
+      { keywords = { "eye", "left", "move" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "l", "move" }, opts = { require_vec2 = false } },
+      { keywords = { "eyel", "move" }, opts = { require_vec2 = false } },
+    },
+    { mode = "signed" }
+  )
+  m.eye_move_r = pick(
+    "eye_move_r",
+    {
+      { keywords = { "eye", "right", "move" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "r", "move" }, opts = { require_vec2 = false } },
+      { keywords = { "eyer", "move" }, opts = { require_vec2 = false } },
+    },
+    { mode = "signed" }
+  )
+  m.eye_move = pick(
+    "eye_move",
+    {
+      { keywords = { "eye", "move" }, opts = { require_vec2 = false } },
     },
     { mode = "signed" }
   )
@@ -313,32 +408,32 @@ function M.make_mapping(param_by_name, opts)
   m.eye_open_l = pick(
     "eye_open_l",
     {
-      { keywords = { "eye", "left", "open" } },
-      { keywords = { "eye", "l", "open" } },
-      { keywords = { "eyel", "open" } },
-      { keywords = { "eye", "lopen" } },
-      { keywords = { "blink", "left" } },
-      { keywords = { "blink", "l" } },
+      { keywords = { "eye", "left", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "l", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "eyel", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "lopen" }, opts = { require_vec2 = false } },
+      { keywords = { "blink", "left" }, opts = { require_vec2 = false } },
+      { keywords = { "blink", "l" }, opts = { require_vec2 = false } },
     },
     { mode = "01" }
   )
   m.eye_open_r = pick(
     "eye_open_r",
     {
-      { keywords = { "eye", "right", "open" } },
-      { keywords = { "eye", "r", "open" } },
-      { keywords = { "eyer", "open" } },
-      { keywords = { "eye", "ropen" } },
-      { keywords = { "blink", "right" } },
-      { keywords = { "blink", "r" } },
+      { keywords = { "eye", "right", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "r", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "eyer", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "eye", "ropen" }, opts = { require_vec2 = false } },
+      { keywords = { "blink", "right" }, opts = { require_vec2 = false } },
+      { keywords = { "blink", "r" }, opts = { require_vec2 = false } },
     },
     { mode = "01" }
   )
   m.eye_open = pick(
     "eye_open",
     {
-      { keywords = { "eye", "open" } },
-      { keywords = { "blink" } },
+      { keywords = { "eye", "open" }, opts = { require_vec2 = false } },
+      { keywords = { "blink" }, opts = { require_vec2 = false } },
     },
     { mode = "01" }
   )
@@ -346,9 +441,9 @@ function M.make_mapping(param_by_name, opts)
   m.breath = pick(
     "breath",
     {
-      { keywords = { "breath" } },
-      { keywords = { "breathe" } },
-      { keywords = { "chest" } },
+      { keywords = { "breath" }, opts = { require_vec2 = false } },
+      { keywords = { "breathe" }, opts = { require_vec2 = false } },
+      { keywords = { "chest" }, opts = { require_vec2 = false } },
     },
     { mode = "signed" }
   )
@@ -472,6 +567,10 @@ function M.default_options()
     head_mouse_yaw = 0.45,
     head_mouse_pitch = 0.35,
 
+    body_follow_yaw = 0.35,
+    body_follow_pitch = 0.25,
+    body_follow_roll = 0.25,
+
     blink_min_delay = 3.0,
     blink_max_delay = 8.0,
     blink_close_sec = 0.12,
@@ -483,6 +582,7 @@ function M.default_options()
     saccade_strength_y = 0.6,
 
     smooth_head_tau = 0.18,
+    smooth_body_tau = 0.26,
     smooth_eye_tau = 0.10,
     smooth_mouth_tau = 0.06,
 
@@ -511,6 +611,7 @@ function M.new(param_by_name, opts)
     options = options,
 
     head = { roll = 0.0, yaw = 0.0, pitch = 0.0 },
+    body = { roll = 0.0, yaw = 0.0, pitch = 0.0 },
     mouth = { v = 0.0 },
     eye = {
       x = 0.0,
@@ -615,10 +716,32 @@ function M.update(api, ctrl, dt, t, mouth_raw, input)
   mx = clamp(mx, -1.0, 1.0)
   my = clamp(my, -1.0, 1.0)
 
+  -- Optional external drive (normalized): head/base pose (e.g. from tracking).
+  local head_base_roll = 0.0
+  local head_base_yaw = 0.0
+  local head_base_pitch = 0.0
+  if input then
+    if type(input.head) == "table" then
+      head_base_roll = clamp(tonumber(input.head.roll) or 0.0, -1.0, 1.0)
+      head_base_yaw = clamp(tonumber(input.head.yaw) or 0.0, -1.0, 1.0)
+      head_base_pitch = clamp(tonumber(input.head.pitch) or 0.0, -1.0, 1.0)
+    else
+      if input.head_roll ~= nil then
+        head_base_roll = clamp(tonumber(input.head_roll) or 0.0, -1.0, 1.0)
+      end
+      if input.head_yaw ~= nil then
+        head_base_yaw = clamp(tonumber(input.head_yaw) or 0.0, -1.0, 1.0)
+      end
+      if input.head_pitch ~= nil then
+        head_base_pitch = clamp(tonumber(input.head_pitch) or 0.0, -1.0, 1.0)
+      end
+    end
+  end
+
   -- Head target: idle noise + optional mouse follow.
-  local head_roll_t = 0.0
-  local head_yaw_t = 0.0
-  local head_pitch_t = 0.0
+  local head_roll_t = head_base_roll
+  local head_yaw_t = head_base_yaw
+  local head_pitch_t = head_base_pitch
 
   if opt.idle_enabled then
     local n1 = noise01(t * 0.7 + 12.3)
@@ -642,17 +765,58 @@ function M.update(api, ctrl, dt, t, mouth_raw, input)
   ctrl.head.yaw = exp_smooth(ctrl.head.yaw or 0.0, head_yaw_t, dt, opt.smooth_head_tau or 0.18)
   ctrl.head.pitch = exp_smooth(ctrl.head.pitch or 0.0, head_pitch_t, dt, opt.smooth_head_tau or 0.18)
 
+  if m.head then
+    set_vec2_signed(api, m.head, ctrl.head.yaw, ctrl.head.pitch)
+  end
   set_scalar_signed(api, m.head_roll, ctrl.head.roll)
   set_scalar_signed(api, m.head_yaw, ctrl.head.yaw)
   set_scalar_signed(api, m.head_pitch, ctrl.head.pitch)
 
+  -- Body: follow head (optional).
+  if m.body or m.body_yaw or m.body_pitch or m.body_roll then
+    local byaw_t = (ctrl.head.yaw or 0.0) * (opt.body_follow_yaw or 0.35)
+    local bpitch_t = (ctrl.head.pitch or 0.0) * (opt.body_follow_pitch or 0.25)
+    local broll_t = (ctrl.head.roll or 0.0) * (opt.body_follow_roll or 0.25)
+
+    ctrl.body.yaw = exp_smooth(ctrl.body.yaw or 0.0, byaw_t, dt, opt.smooth_body_tau or 0.26)
+    ctrl.body.pitch = exp_smooth(ctrl.body.pitch or 0.0, bpitch_t, dt, opt.smooth_body_tau or 0.26)
+    ctrl.body.roll = exp_smooth(ctrl.body.roll or 0.0, broll_t, dt, opt.smooth_body_tau or 0.26)
+
+    if m.body then
+      set_vec2_signed(api, m.body, ctrl.body.yaw, ctrl.body.pitch)
+    end
+    set_scalar_signed(api, m.body_yaw, ctrl.body.yaw)
+    set_scalar_signed(api, m.body_pitch, ctrl.body.pitch)
+    set_scalar_signed(api, m.body_roll, ctrl.body.roll)
+  end
+
   -- Eyes: mouse look or idle saccades.
   local ex_t, ey_t = 0.0, 0.0
-  if opt.mouse_look_enabled then
+  local has_external_look = false
+  if input then
+    local look = nil
+    if type(input.look) == "table" then
+      look = input.look
+    elseif type(input.eye) == "table" then
+      look = input.eye
+    end
+    if look then
+      local lx = clamp(tonumber(look.x) or 0.0, -1.0, 1.0)
+      local ly = clamp(tonumber(look.y) or 0.0, -1.0, 1.0)
+      ex_t, ey_t = lx, ly
+      ctrl.eye.target_x = ex_t
+      ctrl.eye.target_y = ey_t
+      has_external_look = true
+    end
+  end
+
+  if (not has_external_look) and opt.mouse_look_enabled then
     ex_t, ey_t = mx, -my
     ctrl.eye.target_x = ex_t
     ctrl.eye.target_y = ey_t
-  else
+  end
+
+  if (not has_external_look) and (not opt.mouse_look_enabled) then
     update_saccade(ctrl, t)
   end
 
@@ -667,12 +831,30 @@ function M.update(api, ctrl, dt, t, mouth_raw, input)
   end
 
   -- Blink: apply on eye-open parameters if present.
+  local base_eye_l = 1.0
+  local base_eye_r = 1.0
+  if input then
+    if input.eye_open ~= nil then
+      local v = clamp(tonumber(input.eye_open) or 1.0, 0.0, 1.0)
+      base_eye_l = v
+      base_eye_r = v
+    else
+      if input.eye_open_l ~= nil then
+        base_eye_l = clamp(tonumber(input.eye_open_l) or 1.0, 0.0, 1.0)
+      end
+      if input.eye_open_r ~= nil then
+        base_eye_r = clamp(tonumber(input.eye_open_r) or 1.0, 0.0, 1.0)
+      end
+    end
+  end
+
   local blink_open = update_blink(ctrl, dt)
   if m.eye_open_l or m.eye_open_r then
-    set_scalar_01(api, m.eye_open_l, blink_open)
-    set_scalar_01(api, m.eye_open_r, blink_open)
+    set_scalar_01(api, m.eye_open_l, blink_open * base_eye_l)
+    set_scalar_01(api, m.eye_open_r, blink_open * base_eye_r)
   else
-    set_scalar_01(api, m.eye_open, blink_open)
+    local base_eye = (base_eye_l + base_eye_r) * 0.5
+    set_scalar_01(api, m.eye_open, blink_open * base_eye)
   end
 
   -- Mouth: smooth raw envelope a bit.

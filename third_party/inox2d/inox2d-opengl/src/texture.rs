@@ -26,11 +26,14 @@ impl Texture {
 			gl.bind_texture(glow::TEXTURE_2D, Some(tex));
 			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
 			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
-			// Inochi2D models frequently use UVs slightly outside [0..1] to avoid seams.
-			// CLAMP_TO_EDGE matches the reference renderer behavior better than CLAMP_TO_BORDER (which would turn
-			// out-of-range samples fully transparent).
-			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
-			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+			// Inochi2D models may use UVs slightly outside [0..1]; clamp to a transparent border to avoid
+			// "smearing" (stretching edge pixels) when sampling out-of-range.
+			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_BORDER as i32);
+			gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_BORDER as i32);
+
+			// Texture parameters for f32 slices are not supported on WASM yet.
+			#[cfg(not(target_arch = "wasm32"))]
+			gl.tex_parameter_f32_slice(glow::TEXTURE_2D, glow::TEXTURE_BORDER_COLOR, &[0.0; 4]);
 
 			gl.tex_image_2d(
 				glow::TEXTURE_2D,
@@ -104,7 +107,10 @@ pub unsafe fn upload_empty(gl: &glow::Context, tex: glow::Texture, width: u32, h
 	);
 	gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
 	gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
-	gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
-	gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+	gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_BORDER as i32);
+	gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_BORDER as i32);
+
+	#[cfg(not(target_arch = "wasm32"))]
+	gl.tex_parameter_f32_slice(glow::TEXTURE_2D, glow::TEXTURE_BORDER_COLOR, &[0.0; 4]);
 	gl.bind_texture(glow::TEXTURE_2D, None);
 }

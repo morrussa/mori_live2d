@@ -16,18 +16,6 @@ use crate::puppet::{InoxNodeTree, Puppet, World};
 
 pub use vertex_buffers::VertexBuffers;
 
-#[inline]
-fn zsort_key(z: f32) -> u32 {
-	// In the reference Inochi2D implementation, visuals are sorted by a `fixed32(zSort).data` key.
-	// We approximate the same total ordering here by sorting on the raw IEEE-754 bits.
-	//
-	// This produces:
-	// - non-negative values in ascending numeric order
-	// - negative values in descending numeric order
-	// which matches how typical Inochi2D models layer "front" parts using negative zSort.
-	z.to_bits()
-}
-
 fn collect_delegated_visuals(nodes: &InoxNodeTree, comps: &World, root: InoxNodeUuid, out: &mut Vec<InoxNodeUuid>) {
 	fn dfs(nodes: &InoxNodeTree, comps: &World, id: InoxNodeUuid, out: &mut Vec<InoxNodeUuid>) {
 		let Some(node) = nodes.get_node(id) else {
@@ -391,7 +379,11 @@ impl RenderCtx {
 							.zsorted_children_list,
 					);
 
-					zsorted_children_list.sort_by_key(|id| zsort_key(comps.get::<ZSort>(*id).unwrap().0));
+					zsorted_children_list.sort_by(|a, b| {
+						let za = comps.get::<ZSort>(*a).unwrap().0;
+						let zb = comps.get::<ZSort>(*b).unwrap().0;
+						za.total_cmp(&zb).reverse()
+					});
 
 					swap(
 						&mut zsorted_children_list,
@@ -418,9 +410,11 @@ impl RenderCtx {
 			}
 		}
 
-		// Reference Inochi2D implementation sorts visuals by a fixed-point zSort key.
-		self.root_drawables_zsorted
-			.sort_by_key(|id| zsort_key(comps.get::<ZSort>(*id).unwrap().0));
+		self.root_drawables_zsorted.sort_by(|a, b| {
+			let za = comps.get::<ZSort>(*a).unwrap().0;
+			let zb = comps.get::<ZSort>(*b).unwrap().0;
+			za.total_cmp(&zb).reverse()
+		});
 	}
 }
 

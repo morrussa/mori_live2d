@@ -297,16 +297,12 @@ impl OpenglRenderer {
 					gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_COLOR);
 				}
 				BlendMode::ClipToLower => {
-					// Inochi2D `ClipToLower` is `SourceIn` (Porter-Duff): keep source only where destination alpha exists.
-					// Assumes premultiplied alpha textures.
 					gl.blend_equation(glow::FUNC_ADD);
-					gl.blend_func(glow::DST_ALPHA, glow::ZERO);
+					gl.blend_func(glow::DST_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 				}
 				BlendMode::SliceFromLower => {
-					// Inochi2D `SliceFromLower` is `SourceOut` (Porter-Duff): keep source only where destination alpha is empty.
-					// Assumes premultiplied alpha textures.
-					gl.blend_equation(glow::FUNC_ADD);
-					gl.blend_func(glow::ONE_MINUS_DST_ALPHA, glow::ZERO);
+					gl.blend_equation(glow::FUNC_SUBTRACT);
+					gl.blend_func(glow::ONE_MINUS_DST_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 				}
 			}
 		}

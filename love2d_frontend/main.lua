@@ -417,9 +417,14 @@ function love.draw()
         y = y + 16
       end
     end
+    show("head", m.head)
     show("head_yaw", m.head_yaw)
     show("head_pitch", m.head_pitch)
     show("head_roll", m.head_roll)
+    show("body", m.body)
+    show("body_yaw", m.body_yaw)
+    show("body_pitch", m.body_pitch)
+    show("body_roll", m.body_roll)
     show("mouth_open", m.mouth_open)
     show("eye_ball", m.eye_ball)
     show("eye_open_l", m.eye_open_l)
