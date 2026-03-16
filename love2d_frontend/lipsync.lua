@@ -60,14 +60,30 @@ function M.build_envelope(sound_data, window_sec)
 end
 
 function M.load_wav_for_playback(wav_path, window_sec)
+  wav_path = tostring(wav_path or "")
+  if wav_path == "" then
+    return nil, "empty wav path"
+  end
+
   local bytes = read_file_bytes(wav_path)
   if not bytes then
     return nil, "failed to read wav: " .. tostring(wav_path)
   end
 
-  local file_data = love.filesystem.newFileData(bytes, "tts.wav")
-  local sound_data = love.sound.newSoundData(file_data)
-  local source = love.audio.newSource(sound_data)
+  local ok_file, file_data = pcall(love.filesystem.newFileData, bytes, "tts.wav")
+  if not ok_file then
+    return nil, "failed to load wav bytes: " .. tostring(file_data)
+  end
+
+  local ok_sound, sound_data = pcall(love.sound.newSoundData, file_data)
+  if not ok_sound then
+    return nil, "Could not open WAVE: " .. tostring(sound_data)
+  end
+
+  local ok_source, source = pcall(love.audio.newSource, sound_data)
+  if not ok_source then
+    return nil, "failed to create audio source: " .. tostring(source)
+  end
 
   local env = M.build_envelope(sound_data, window_sec)
   local duration = source:getDuration("seconds")
@@ -101,4 +117,3 @@ function M.update_mouth(playback)
 end
 
 return M
-

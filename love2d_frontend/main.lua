@@ -300,18 +300,23 @@ function love.update(dt)
   -- Poll events.jsonl for new wav_path, enqueue playback.
   local new_events = liveio.poll_events(state.eventTail)
   for _, ev in ipairs(new_events or {}) do
-    state.audioQueue[#state.audioQueue + 1] = ev.wav_path
+    local wav = tostring(ev.wav_path or "")
+    if wav ~= "" and file_exists(wav) then
+      state.audioQueue[#state.audioQueue + 1] = wav
+    end
   end
 
   -- Start next audio if idle.
   if (not state.playback) and #state.audioQueue > 0 then
     local wav = table.remove(state.audioQueue, 1)
-    local pb, aerr = lipsync.load_wav_for_playback(wav, 0.02)
-    if pb then
-      state.playback = pb
-      pb.source:play()
-    else
-      state.err = tostring(aerr)
+    if wav ~= "" and file_exists(wav) then
+      local pb, aerr = lipsync.load_wav_for_playback(wav, 0.02)
+      if pb then
+        state.playback = pb
+        pb.source:play()
+      else
+        state.err = tostring(aerr)
+      end
     end
   end
 
