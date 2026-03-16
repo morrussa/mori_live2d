@@ -109,7 +109,7 @@ python3 -m mori_live2d.cli install-models --models aka midori
 在主仓库根目录运行：
 
 ```bash
-python3 vtuber.py --tts --live-dir live
+cargo run --release -- vtuber --tts --live-dir live
 ```
 
 它会持续写入：
