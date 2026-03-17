@@ -26,6 +26,11 @@ local state = {
   eventTail = nil,
   audioQueue = {},
   playback = nil,
+  mouthPath = "",
+  mouthPoll = 0.0,
+  mouthValue = nil,
+  debugWavPath = "",
+  debugPlayback = nil,
 
   puppetPath = "",
   handle = nil,
@@ -72,6 +77,16 @@ local function parse_bool(v)
     return false
   end
   return nil
+end
+
+local function clamp(x, a, b)
+  if x < a then
+    return a
+  end
+  if x > b then
+    return b
+  end
+  return x
 end
 
 local function file_exists(path)
@@ -188,6 +203,14 @@ function love.load()
   end
   state.eventTail = liveio.new_event_tail(state.eventLogPath)
 
+  state.mouthPath = os.getenv("MORI_MOUTH_PATH") or parse_arg("--mouth") or ""
+  if state.mouthPath == "" then
+    state.mouthPath = liveDir .. "/mouth.txt"
+  end
+
+  state.debugWavPath = os.getenv("MORI_DEBUG_WAV_PATH") or parse_arg("--debug-wav") or ""
+  state.debugWavPath = sanitize_path(state.debugWavPath)
+
   state.puppetPath = os.getenv("MORI_PUPPET_PATH") or parse_arg("--puppet") or ""
   if state.puppetPath == "" then
     state.puppetPath = repo_path("model/inochi2d/puppets/aka/Aka.inx")
@@ -243,6 +266,19 @@ function love.load()
     print("inochi2d> mapping override: " .. tostring(state.ctrl.mapping.__mapping_path))
   end
 
+  if state.debugWavPath ~= "" and file_exists(state.debugWavPath) then
+    local pb, aerr = lipsync.load_wav_for_playback(state.debugWavPath, 0.02)
+    if pb then
+      pb.source:setLooping(true)
+      pb.source:setVolume(0.0)
+      pb.source:play()
+      state.debugPlayback = pb
+      print("inochi2d> debug wav: " .. tostring(state.debugWavPath))
+    else
+      state.err = tostring(aerr)
+    end
+  end
+
   state.status = "ready"
 end
 
@@ -267,6 +303,23 @@ function love.update(dt)
     end
   end
 
+  -- Poll mouth value (streaming TTS).
+  if state.mouthPath ~= "" then
+    state.mouthPoll = state.mouthPoll - dt
+    if state.mouthPoll <= 0.0 then
+      state.mouthPoll = 0.05
+      local f = io.open(state.mouthPath, "rb")
+      if f then
+        local raw = f:read("*a") or ""
+        f:close()
+        local v = tonumber(raw)
+        if v ~= nil then
+          state.mouthValue = clamp(v, 0.0, 1.0)
+        end
+      end
+    end
+  end
+
   if inox.ok and state.handle ~= nil then
     pcall(function()
       inox.begin_frame(state.handle)
@@ -277,7 +330,11 @@ function love.update(dt)
       }
       if state.ctrl then
         local mouth = 0.0
-        if state.playback then
+        if state.debugPlayback then
+          mouth = lipsync.update_mouth(state.debugPlayback)
+        elseif state.mouthValue ~= nil then
+          mouth = state.mouthValue
+        elseif state.playback then
           mouth = lipsync.update_mouth(state.playback)
         end
         local nx, ny = 0.0, 0.0
@@ -302,15 +359,30 @@ function love.update(dt)
   for _, ev in ipairs(new_events or {}) do
     local wav = tostring(ev.wav_path or "")
     if wav ~= "" and file_exists(wav) then
-      state.audioQueue[#state.audioQueue + 1] = wav
+      state.audioQueue[#state.audioQueue + 1] = {
+        wav_path = wav,
+        envelope = ev.mouth_envelope,
+        window_sec = tonumber(ev.mouth_window_sec or 0) or 0,
+        duration = tonumber(ev.mouth_duration or 0) or 0,
+      }
     end
   end
 
   -- Start next audio if idle.
   if (not state.playback) and #state.audioQueue > 0 then
-    local wav = table.remove(state.audioQueue, 1)
+    local item = table.remove(state.audioQueue, 1)
+    local wav = item
+    local env = nil
+    local win = 0.02
+    local dur = 0.0
+    if type(item) == "table" then
+      wav = tostring(item.wav_path or "")
+      env = item.envelope
+      win = tonumber(item.window_sec or 0.02) or 0.02
+      dur = tonumber(item.duration or 0) or 0.0
+    end
     if wav ~= "" and file_exists(wav) then
-      local pb, aerr = lipsync.load_wav_for_playback(wav, 0.02)
+      local pb, aerr = lipsync.load_wav_for_playback(wav, win, env, dur)
       if pb then
         state.playback = pb
         pb.source:play()

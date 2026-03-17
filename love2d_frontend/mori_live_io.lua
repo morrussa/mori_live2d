@@ -143,6 +143,60 @@ local function json_extract_string(line, key)
   return nil
 end
 
+local function json_extract_number(line, key)
+  local needle = '"' .. key .. '"'
+  local kpos = line:find(needle, 1, true)
+  if not kpos then
+    return nil
+  end
+  local i = kpos + #needle
+  local colon = line:find(":", i, true)
+  if not colon then
+    return nil
+  end
+  i = colon + 1
+  while i <= #line and line:sub(i, i):match("%s") do
+    i = i + 1
+  end
+  local num = line:match("[-+]?%d*%.?%d+", i)
+  if not num then
+    return nil
+  end
+  return tonumber(num)
+end
+
+local function json_extract_number_array(line, key)
+  local needle = '"' .. key .. '"'
+  local kpos = line:find(needle, 1, true)
+  if not kpos then
+    return nil
+  end
+  local i = kpos + #needle
+  local colon = line:find(":", i, true)
+  if not colon then
+    return nil
+  end
+  i = colon + 1
+  while i <= #line and line:sub(i, i):match("%s") do
+    i = i + 1
+  end
+  if i > #line or line:sub(i, i) ~= "[" then
+    return nil
+  end
+  local j = line:find("]", i + 1, true)
+  if not j then
+    return nil
+  end
+  local slice = line:sub(i + 1, j - 1)
+  local out = {}
+  for num in slice:gmatch("[-+]?%d*%.?%d+") do
+    out[#out + 1] = tonumber(num)
+  end
+  if #out == 0 then
+    return nil
+  end
+  return out
+end
 function M.read_subtitle(path)
   local raw = read_all_text(path)
   if not raw then
@@ -180,8 +234,16 @@ function M.poll_events(tail)
   local events = {}
   for line in f:lines() do
     local wav_path = json_extract_string(line, "wav_path") or ""
+    local mouth_envelope = json_extract_number_array(line, "mouth_envelope")
+    local mouth_window_sec = json_extract_number(line, "mouth_window_sec") or 0
+    local mouth_duration = json_extract_number(line, "mouth_duration") or 0
     if wav_path ~= "" and file_exists(wav_path) then
-      events[#events + 1] = { wav_path = wav_path }
+      events[#events + 1] = {
+        wav_path = wav_path,
+        mouth_envelope = mouth_envelope,
+        mouth_window_sec = mouth_window_sec,
+        mouth_duration = mouth_duration,
+      }
     end
   end
   tail.offset = f:seek()

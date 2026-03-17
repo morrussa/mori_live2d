@@ -59,7 +59,7 @@ function M.build_envelope(sound_data, window_sec)
   return env
 end
 
-function M.load_wav_for_playback(wav_path, window_sec)
+function M.load_wav_for_playback(wav_path, window_sec, precomputed_env, duration_override)
   wav_path = tostring(wav_path or "")
   if wav_path == "" then
     return nil, "empty wav path"
@@ -85,8 +85,16 @@ function M.load_wav_for_playback(wav_path, window_sec)
     return nil, "failed to create audio source: " .. tostring(source)
   end
 
-  local env = M.build_envelope(sound_data, window_sec)
-  local duration = source:getDuration("seconds")
+  local env = nil
+  if type(precomputed_env) == "table" and #precomputed_env > 0 then
+    env = precomputed_env
+  else
+    env = M.build_envelope(sound_data, window_sec)
+  end
+  local duration = tonumber(duration_override) or 0.0
+  if duration <= 0.0 then
+    duration = source:getDuration("seconds")
+  end
 
   return {
     wav_path = wav_path,
